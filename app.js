@@ -23,13 +23,15 @@
   const isWater = R.isWater;
   const zoneAt = R.zoneAt;
   const session = window.sessionStorage;
+  const NAME_KEY = 'nature-world-name';
+  const NAME_MAX = 8;
 
   // 설치 기능(placement.js)이 게임 화면과 주고받는 창구
   const game = window.NatureGame = { scene: null, inputLocked: false, worldPointerHandler: null, getMe: () => state.me };
 
   const $ = (id) => document.getElementById(id);
   const elements = {
-    status: $('connection-status'), joinCard: $('join-card'), joinForm: $('join-form'), joinCode: $('join-code'), joinButton: $('join-button'),
+    status: $('connection-status'), joinCard: $('join-card'), joinForm: $('join-form'), joinName: $('join-name'), joinCode: $('join-code'), joinButton: $('join-button'),
     joinMessage: $('join-message'), devEnter: $('dev-enter'), worldSection: $('world-section'),
     people: $('presence-list'), summary: $('presence-summary'), location: $('location-status'), realtime: $('realtime-note')
   };
@@ -42,7 +44,17 @@
   };
 
   function hash(value) { return [...value].reduce((total, char) => (total * 31 + char.charCodeAt(0)) >>> 0, 7); }
-  function makePerson(id) { const color = [0xf27b6a, 0x7146c4, 0xf4b942, 0x2987c5, 0x45a85a][hash(id) % 5]; return { id, name: `탐험가 ${id.slice(-4)}`, color, x: 560 + (hash(id) % 8) * 46, y: 510 + (hash(id) % 6) * 38, seq: 0, timestamp: Date.now() }; }
+  // 이름(별명): 화면에 그대로 보이므로 제어 문자와 <> 를 지우고 8글자까지만 쓴다(다른 사람이 보낸 이름에도 같은 규칙을 적용).
+  function cleanName(raw) { return Array.from(String(raw || '').normalize('NFC').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim()).slice(0, NAME_MAX).join('').trim(); }
+  // 출석 번호처럼 보이는 이름(숫자만, 또는 "12번")은 막는다. 진짜 이름은 기계가 알 수 없어서 안내 문구로만 부탁한다.
+  function nameProblem(name) {
+    if (!name) return '이름(별명)을 적어 주세요.';
+    if (/^[\d\s]+번?$/.test(name)) return '출석 번호 말고 나만의 별명을 적어 주세요.';
+    return '';
+  }
+  function savedName() { try { return cleanName(window.localStorage.getItem(NAME_KEY)); } catch (error) { return ''; } }
+  function saveName(name) { try { window.localStorage.setItem(NAME_KEY, name); } catch (error) { /* 저장 못 해도 입장은 된다 */ } }
+  function makePerson(id, name) { const color = [0xf27b6a, 0x7146c4, 0xf4b942, 0x2987c5, 0x45a85a][hash(id) % 5]; return { id, name: cleanName(name) || `탐험가 ${id.slice(-4)}`, color, x: 560 + (hash(id) % 8) * 46, y: 510 + (hash(id) % 6) * 38, seq: 0, timestamp: Date.now() }; }
   function setStatus(text) { elements.status.textContent = text; }
 
   class NatureScene extends Phaser.Scene {
@@ -246,7 +258,7 @@
     if (payload.timestamp <= old) return; // 순서가 뒤바뀐 오래된 메시지는 버림(보낸 사람 자신의 시계끼리만 비교)
     state.lastReceived.set(payload.id, payload.timestamp);
     const known = state.peers.get(payload.id);
-    state.peers.set(payload.id, { ...(known || {}), id: payload.id, name: payload.name, color: payload.color, x: payload.x, y: payload.y, timestamp: payload.timestamp, receivedAt: Date.now() });
+    state.peers.set(payload.id, { ...(known || {}), id: payload.id, name: cleanName(payload.name) || `탐험가 ${String(payload.id).slice(-4)}`, color: payload.color, x: payload.x, y: payload.y, timestamp: payload.timestamp, receivedAt: Date.now() });
     if (!known) { redraw(); const view = state.views.get(payload.id); if (view) view.container.setPosition(payload.x, payload.y); }
     state.hudDirty = true;
   }
@@ -307,9 +319,10 @@
   function setJoinMessage(text, type = '') { elements.joinMessage.textContent = text; elements.joinMessage.dataset.type = type; }
   function showJoin(message) {
     elements.joinCard.hidden = false; elements.worldSection.hidden = true;
-    setStatus('입장 코드를 입력해 주세요.');
+    setStatus('이름과 입장 코드를 입력해 주세요.');
     if (message) setJoinMessage(message);
-    elements.joinCode.focus();
+    if (!elements.joinName.value) elements.joinName.value = savedName();
+    (elements.joinName.value ? elements.joinCode : elements.joinName).focus();
   }
   function ensureGame() {
     if (state.gamePromise) return state.gamePromise;
@@ -319,13 +332,15 @@
     });
     return state.gamePromise;
   }
-  async function enterWorld(mode, userId, data) {
+  async function enterWorld(mode, userId, data, name) {
     myId = userId; session.setItem('nature-prototype-id', myId);
-    state.mode = mode; state.me = makePerson(myId); state.data = data;
+    const myName = cleanName(name) || savedName();
+    if (myName) saveName(myName);
+    state.mode = mode; state.me = makePerson(myId, myName); state.data = data;
     elements.joinCard.hidden = true; elements.worldSection.hidden = false;
     setStatus('자연 공간을 준비하고 있어요…');
     await ensureGame();
-    state.me = makePerson(myId);
+    state.me = makePerson(myId, myName);
     if (state.scene.anchor) state.scene.anchor.setPosition(state.me.x, state.me.y);
     state.connected = true;
     setRealtime(mode === 'real' ? 'connecting' : 'idle');
@@ -361,6 +376,10 @@
   async function onJoinSubmit(event) {
     event.preventDefault();
     if (state.joining || !state.client) return;
+    const name = cleanName(elements.joinName.value);
+    elements.joinName.value = name;
+    const problem = nameProblem(name);
+    if (problem) { setJoinMessage(problem, 'error'); elements.joinName.focus(); return; }
     const { code } = R.normalizeCode(elements.joinCode.value);
     if (code.length !== R.CODE_LENGTH) { setJoinMessage(`입장 코드는 ${R.CODE_LENGTH}자리예요. 다시 확인해 주세요.`, 'error'); elements.joinCode.focus(); return; }
     state.joining = true; elements.joinButton.disabled = true; setJoinMessage('확인하고 있어요…');
@@ -369,7 +388,7 @@
       const { data, error } = await state.client.rpc('join_class', { p_code: code });
       if (error) throw error;
       const result = Array.isArray(data) ? data[0] : data;
-      if (result && result.ok) { setJoinMessage(''); await enterWorld('real', user.id, D.createRealData(state.client, WORLD_ID)); return; }
+      if (result && result.ok) { setJoinMessage(''); await enterWorld('real', user.id, D.createRealData(state.client, WORLD_ID), name); return; }
       const reason = result && result.reason;
       if (reason === 'invalid_code') setJoinMessage('코드가 맞지 않아요. 선생님이 알려 준 코드를 다시 확인해 주세요.', 'error');
       else if (reason === 'rate_limited') setJoinMessage('코드를 여러 번 틀렸어요. 10분쯤 뒤에 다시 해 보세요.', 'error');
@@ -399,7 +418,7 @@
     const data = D.createMockData({ meId: myId, worldId: WORLD_ID });
     data._addFriend({ owner_id: 'friend-min', kind: 'shrub', x: 640, y: 520 });
     data._addFriend({ owner_id: 'friend-jun', kind: 'fallen_branch', x: 820, y: 980 });
-    await enterWorld('mock', myId, data);
+    await enterWorld('mock', myId, data, cleanName(elements.joinName.value));
   }
 
   window.addEventListener('load', () => {

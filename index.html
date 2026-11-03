@@ -20,14 +20,18 @@
         <div>
           <p class="eyebrow">함께 걷고 발견하는 자연 탐험 공간</p>
           <h1>함께 걷는 자연 공간</h1>
-          <p id="connection-status" role="status">입장 코드를 입력해 주세요.</p>
+          <p id="connection-status" role="status">이름과 입장 코드를 입력해 주세요.</p>
         </div>
       </header>
 
       <section id="join-card" class="setup-card" aria-labelledby="join-title">
-        <h2 id="join-title">입장 코드를 입력해 주세요</h2>
-        <p>선생님이 알려 준 8자리 코드를 적어요. 영어 대문자와 숫자로 되어 있어요.</p>
+        <h2 id="join-title">이름을 적고 입장 코드를 입력해 주세요</h2>
+        <p>친구들에게 보일 이름(별명)을 적고, 선생님이 알려 준 8자리 코드를 적어요. 코드는 영어 대문자와 숫자로 되어 있어요.</p>
         <form id="join-form" autocomplete="off">
+          <label>이름(별명)
+            <input id="join-name" type="text" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="8" placeholder="예: 별빛토끼" aria-describedby="name-hint">
+          </label>
+          <p id="name-hint" class="field-hint">출석 번호나 진짜 이름은 쓰지 않아요. (최대 8글자)</p>
           <label>입장 코드
             <input id="join-code" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="12" placeholder="예: AC4D7K9M" aria-describedby="join-message">
           </label>

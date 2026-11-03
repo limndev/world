@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>입장 코드 만들기 - 함께 걷는 자연 공간</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./placement-rules.js" defer></script>
+    <script src="./code-maker.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">선생님용</p>
+          <h1>입장 코드 만들기</h1>
+        </div>
+      </header>
+      <section class="setup-card code-maker" aria-labelledby="cm-title">
+        <h2 id="cm-title">이번 수업에 쓸 무작위 코드</h2>
+        <p>이 쪽에서 만든 코드는 <strong>이 화면 안에서만</strong> 만들어져요. 서버나 인터넷으로 보내지 않고, 저장하지도 않아요. 새로고침하면 사라져요.</p>
+        <p id="cm-code" class="cm-code" aria-live="polite" aria-label="입장 코드">--------</p>
+        <div class="button-row">
+          <button id="cm-new" type="button">다른 코드로 바꾸기</button>
+          <button id="cm-download" type="button" class="secondary">코드 파일 내려받기 (.txt)</button>
+          <button id="cm-copy-sql" type="button" class="secondary">SQL 복사하기</button>
+        </div>
+        <p id="cm-status" role="status" class="cm-status"></p>
+
+        <h3>이 코드로 바꾸는 순서</h3>
+        <ol class="cm-steps">
+          <li><b>코드 파일 내려받기</b>를 눌러 두세요. 코드를 잊어버렸을 때 다시 볼 곳은 이 파일뿐이에요(서버에는 암호화된 값만 남아요).</li>
+          <li><b>SQL 복사하기</b>를 누르고, Supabase 대시보드의 <b>SQL Editor</b>에 붙여넣어 <b>Run</b>을 눌러요.</li>
+          <li>SQL 끝에 확인용 한 줄이 붙어 있어요. 결과 칸에 <code>code_ok</code> 가 <b>true</b> 로 나오면 바뀐 거예요. (false 이면 바뀌지 않은 거니 다시 실행해 보세요.)</li>
+          <li>학생들에게 코드를 알려 줘요. 이미 들어온 학생은 그대로 있고, 새로 들어올 때부터 새 코드가 필요해요.</li>
+        </ol>
+        <details>
+          <summary>SQL 미리 보기 (무슨 뜻인지 읽어 보세요)</summary>
+          <pre id="cm-sql" class="cm-sql"></pre>
+          <p class="field-hint">① <code>crypt(코드, gen_salt('bf'))</code> 는 코드를 되돌릴 수 없는 암호화 값(해시)으로 바꿔요. 서버는 코드 자체를 저장하지 않고 이 값만 저장해요. ② <code>where world_id = ...</code> 는 이 학급 한 줄만 바꾸라는 조건이에요. 조건이 없으면 모든 줄이 바뀌므로 지우지 마세요.</p>
+        </details>
+        <p class="field-hint">내려받은 파일은 GitHub나 공개 폴더에 올리지 마세요. 파일 이름은 <code>join-code-날짜.txt</code> 이고, 이 폴더에서는 git이 무시하도록 설정해 두었어요.</p>
+      </section>
+    </main>
+  </body>
+</html>

@@ -214,7 +214,8 @@ const text = (page, sel) => page.locator(sel).first().innerText();
 const status = (page) => text(page, '#np-status');
 async function dbg(page, expr) { return page.evaluate(expr); }
 
-async function enterWithCode(c, code) {
+async function enterWithCode(c, code, name) {
+  await c.page.fill('#join-name', name || `별명${c.id}`);
   await c.page.fill('#join-code', code);
   await c.page.click('#join-button');
 }
@@ -242,6 +243,21 @@ async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.Nat
     const filtered = await A.page.inputValue('#join-code');
     check(filtered === 'A', '헷갈리는 글자는 입력 칸에서 바로 지워진다', filtered);
     check((await text(A.page, '#join-message')).includes('쓰지 않는 글자'), '지운 이유를 안내한다');
+    // 이름(별명) 칸: 비어 있거나 출석 번호처럼 보이면 서버에 보내기 전에 막는다
+    check((await text(A.page, '#name-hint')).includes('출석 번호나 진짜 이름은 쓰지 않아요'), '이름 칸 아래에 출석 번호·진짜 이름 금지 안내가 있다');
+    await A.page.fill('#join-code', 'ACDE');
+    await A.page.fill('#join-name', '   ');
+    await A.page.click('#join-button');
+    check((await text(A.page, '#join-message')).includes('이름(별명)을 적어'), '이름이 비면 안내만 보여 준다');
+    await A.page.fill('#join-name', '12번');
+    await A.page.click('#join-button');
+    check((await text(A.page, '#join-message')).includes('출석 번호 말고'), '출석 번호처럼 보이는 이름은 막는다');
+    await A.page.fill('#join-name', '<b>별빛토끼열두글자넘는이름</b>');
+    const cleaned = await A.page.inputValue('#join-name');
+    check(await A.page.evaluate(() => document.getElementById('join-name').maxLength) === 8, '이름 칸은 8글자까지만 받는다');
+    await A.page.click('#join-button');
+    check((await A.page.inputValue('#join-name')).length <= 8 && !/[<>]/.test(await A.page.inputValue('#join-name')), '이름에서 <> 는 지우고 8글자로 줄인다', cleaned);
+    await A.page.fill('#join-name', '별빛토끼');
     await A.page.fill('#join-code', 'ACDE');
     await A.page.click('#join-button');
     check((await text(A.page, '#join-message')).includes('8자리'), '짧은 코드는 안내 문구만 보여 준다');
@@ -272,6 +288,8 @@ async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.Nat
     check(await waitWorld(B), 'B도 입장했다');
     check(await until(async () => (await A.page.evaluate(() => window.__nature.state.peers.size)) === 1, 5000), 'A가 B를 친구로 본다(접속 상태)');
     check(await until(async () => (await text(A.page, '#presence-summary')).includes('2명')), '접속자 수가 2명으로 표시된다');
+    check(await until(async () => (await text(A.page, '#presence-list')).includes('별명B')), 'A 화면에 B가 입력한 이름이 보인다');
+    check((await text(A.page, '#presence-list')).includes('별명A (나)'), 'A 자신의 이름에는 (나)가 붙고, 새로고침해도 이름이 유지된다', await text(A.page, '#presence-list'));
     // A가 걷는다 → B가 위치를 받는다
     const before = await B.page.evaluate(() => { const p = [...window.__nature.state.peers.values()][0]; return p ? { x: p.x, y: p.y } : null; });
     await A.page.locator('#game').focus();
