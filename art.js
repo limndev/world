@@ -451,36 +451,59 @@
   }
 
   // ---------- 사람 ----------
-  function makeCharacter(jacketColor) {
+  // phase: null이면 서 있는 모습, 숫자면 걷는 동작의 한 장면(0~2π). back: 뒷모습(위쪽으로 걸을 때)
+  function makeCharacter(jacketColor, back, phase) {
     const [cv, g] = canvas(64, 92); const jacket = hex(jacketColor);
     const light = rgba(mix(jacketColor, 0xffffff, 0.35)); const base = rgba(jacket); const dark = rgba(mix(jacketColor, 0x1b2a28, 0.4));
-    groundShadow(g, 34, 84, 24, 6, 0.4);
-    // 다리와 신발
-    g.fillStyle = '#35507a'; g.fillRect(22, 58, 8, 18); g.fillRect(34, 58, 8, 18);
-    g.fillStyle = '#f2f0ea'; g.beginPath(); g.ellipse(26, 78, 8, 4.5, 0, 0, TAU); g.ellipse(38, 78, 8, 4.5, 0, 0, TAU); g.fill(); g.strokeStyle = 'rgba(40,40,50,0.6)'; g.lineWidth = 1.2; g.stroke();
-    // 가방 끈과 몸(재킷)
+    const walking = phase !== null;
+    const s = walking ? Math.sin(phase) : 0;
+    groundShadow(g, 34, 84, 24 - Math.abs(s) * 1.5, 6, 0.4);
+    // 다리: 한쪽 발은 들리고 다른 쪽은 땅을 딛는다. 몸 앞/뒤로 뻗는 느낌을 위해 길이도 살짝 바뀐다.
+    const legs = [[26, -s], [38, s]];
+    legs.forEach(([x, k]) => {
+      const lift = Math.max(0, k) * 9; const reach = k * 5;
+      g.fillStyle = '#35507a'; g.fillRect(x - 4, 58 - reach * 0.4, 8, 18 + reach * 0.4 - lift);
+      g.fillStyle = '#f2f0ea'; g.strokeStyle = 'rgba(40,40,50,0.6)'; g.lineWidth = 1.2;
+      g.beginPath(); g.ellipse(x + k * 1.5, 78 - lift + reach * 0.5, 8, 4.5, 0, 0, TAU); g.fill(); g.stroke();
+    });
+    // 팔: 다리와 반대로 흔든다
+    const armY = (k) => 46 + k * 6;
+    const drawArms = () => {
+      [[14, 0.18, s], [50, -0.18, -s]].forEach(([x, rot, k]) => {
+        g.fillStyle = base; g.strokeStyle = 'rgba(30,45,42,0.7)'; g.lineWidth = 1.6; g.beginPath(); g.ellipse(x, armY(k), 5.4, 12, rot, 0, TAU); g.fill(); g.stroke();
+        g.fillStyle = '#f9cfa4'; g.beginPath(); g.arc(x + (x < 30 ? -2 : 2), armY(k) + 10, 4, 0, TAU); g.fill();
+      });
+    };
+    if (back) drawArms();
     g.fillStyle = dark; g.beginPath(); g.ellipse(32, 52, 15, 7, 0, 0, TAU); g.fill();
     const bg = g.createLinearGradient(16, 34, 48, 62); bg.addColorStop(0, light); bg.addColorStop(0.5, base); bg.addColorStop(1, dark);
     g.fillStyle = bg; g.strokeStyle = 'rgba(30,45,42,0.7)'; g.lineWidth = 1.8; g.beginPath(); g.roundRect ? g.roundRect(16, 32, 32, 30, 11) : g.rect(16, 32, 32, 30); g.fill(); g.stroke();
-    g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(31, 34, 2.4, 26);
-    // 팔
-    g.fillStyle = base; g.strokeStyle = 'rgba(30,45,42,0.7)'; g.beginPath(); g.ellipse(14, 46, 5.4, 12, 0.18, 0, TAU); g.ellipse(50, 46, 5.4, 12, -0.18, 0, TAU); g.fill(); g.stroke();
-    g.fillStyle = '#f9cfa4'; g.beginPath(); g.arc(12, 56, 4, 0, TAU); g.arc(52, 56, 4, 0, TAU); g.fill();
+    if (back) {
+      // 가방
+      const pg = g.createLinearGradient(20, 36, 44, 62); pg.addColorStop(0, '#f6c85a'); pg.addColorStop(1, '#c98f2e');
+      g.fillStyle = pg; g.strokeStyle = 'rgba(90,60,20,0.7)'; g.beginPath(); g.roundRect ? g.roundRect(20, 35, 24, 24, 8) : g.rect(20, 35, 24, 24); g.fill(); g.stroke();
+      g.strokeStyle = 'rgba(90,60,20,0.5)'; g.beginPath(); g.moveTo(22, 46); g.lineTo(42, 46); g.stroke();
+    } else { g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(31, 34, 2.4, 26); }
+    if (!back) drawArms();
     // 머리
     const hg = g.createRadialGradient(27, 16, 2, 32, 22, 22); hg.addColorStop(0, '#ffe4c4'); hg.addColorStop(1, '#f1b98c');
     g.fillStyle = hg; g.strokeStyle = 'rgba(100,60,40,0.7)'; g.lineWidth = 1.6; g.beginPath(); g.arc(32, 22, 18, 0, TAU); g.fill(); g.stroke();
     g.fillStyle = '#f1b98c'; g.beginPath(); g.arc(14, 24, 3.4, 0, TAU); g.arc(50, 24, 3.4, 0, TAU); g.fill();
-    // 머리카락
     const hair = g.createLinearGradient(14, 4, 50, 22); hair.addColorStop(0, '#6a4c3a'); hair.addColorStop(1, '#3d2b2a');
-    g.fillStyle = hair; g.beginPath(); g.moveTo(13, 22); g.bezierCurveTo(12, 2, 52, 2, 51, 22); g.bezierCurveTo(46, 12, 38, 11, 32, 14); g.bezierCurveTo(26, 11, 18, 13, 13, 22); g.fill();
-    g.fillStyle = 'rgba(255,230,190,0.35)'; g.beginPath(); g.ellipse(24, 9, 6, 2.4, -0.4, 0, TAU); g.fill();
-    // 얼굴
-    g.fillStyle = '#2b3b45'; g.beginPath(); g.ellipse(26, 24, 2.2, 3, 0, 0, TAU); g.ellipse(38, 24, 2.2, 3, 0, 0, TAU); g.fill();
-    g.fillStyle = '#fff'; g.beginPath(); g.arc(26.8, 23, 0.9, 0, TAU); g.arc(38.8, 23, 0.9, 0, TAU); g.fill();
-    g.fillStyle = 'rgba(255,130,130,0.4)'; g.beginPath(); g.ellipse(21, 30, 3.4, 2, 0, 0, TAU); g.ellipse(43, 30, 3.4, 2, 0, 0, TAU); g.fill();
-    g.strokeStyle = '#8a4a3a'; g.lineWidth = 1.5; g.lineCap = 'round'; g.beginPath(); g.arc(32, 30, 4, 0.2, Math.PI - 0.2); g.stroke();
+    g.fillStyle = hair; g.beginPath();
+    if (back) { g.arc(32, 22, 18.5, 0, TAU); g.fill(); g.strokeStyle = 'rgba(30,20,20,0.5)'; g.lineWidth = 1.4; g.stroke(); g.fillStyle = 'rgba(255,230,190,0.3)'; g.beginPath(); g.ellipse(25, 11, 7, 2.6, -0.4, 0, TAU); g.fill(); }
+    else {
+      g.moveTo(13, 22); g.bezierCurveTo(12, 2, 52, 2, 51, 22); g.bezierCurveTo(46, 12, 38, 11, 32, 14); g.bezierCurveTo(26, 11, 18, 13, 13, 22); g.fill();
+      g.fillStyle = 'rgba(255,230,190,0.35)'; g.beginPath(); g.ellipse(24, 9, 6, 2.4, -0.4, 0, TAU); g.fill();
+      g.fillStyle = '#2b3b45'; g.beginPath(); g.ellipse(26, 24, 2.2, 3, 0, 0, TAU); g.ellipse(38, 24, 2.2, 3, 0, 0, TAU); g.fill();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(26.8, 23, 0.9, 0, TAU); g.arc(38.8, 23, 0.9, 0, TAU); g.fill();
+      g.fillStyle = 'rgba(255,130,130,0.4)'; g.beginPath(); g.ellipse(21, 30, 3.4, 2, 0, 0, TAU); g.ellipse(43, 30, 3.4, 2, 0, 0, TAU); g.fill();
+      g.strokeStyle = '#8a4a3a'; g.lineWidth = 1.5; g.lineCap = 'round'; g.beginPath(); g.arc(32, 30, 4, 0.2, Math.PI - 0.2); g.stroke();
+    }
     return cv;
   }
+  const WALK_FRAMES = 8;
+  function characterKey(color, back, frame) { return `char_${color}_${back ? 'b' : 'f'}_${frame === null ? 'idle' : frame}`; }
 
   // ---------- 빛 덮개(화면에 고정) ----------
   function makeLight(w, h) {
@@ -514,7 +537,10 @@
     TREE_PALETTES.forEach((pal, i) => add(`tree${i + 1}`, makeTree(101 + i * 17, pal)));
     add('shrubFlower', makeShrub()); add('wildflowerPatch', makeWildflowers()); add('mossyRocks', makeRocks());
     add('fallenBranch', makeBranch()); add('grassTuft', makeTuft()); add('lilyReeds', makeReeds()); add('bench', makeBench());
-    CHARACTER_COLORS.forEach((c) => add(`char_${c}`, makeCharacter(c)));
+    CHARACTER_COLORS.forEach((c) => [false, true].forEach((back) => {
+      add(characterKey(c, back, null), makeCharacter(c, back, null));
+      for (let f = 0; f < WALK_FRAMES; f += 1) add(characterKey(c, back, f), makeCharacter(c, back, (f / WALK_FRAMES) * TAU));
+    }));
     add('lightOverlay', makeLight(960, 600));
   }
 
@@ -531,5 +557,5 @@
     return sway;
   }
 
-  return { registerTextures, placeFlora, CHARACTER_COLORS };
+  return { registerTextures, placeFlora, CHARACTER_COLORS, characterKey, WALK_FRAMES };
 });

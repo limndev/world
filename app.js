@@ -157,11 +157,11 @@
     const container = scene.add.container(person.x, person.y).setName(`person-${person.id}`).setDepth(1000 + person.y);
     const jacket = person.color;
     const label = scene.add.text(-39, 29, isMe ? '나' : person.name, { fontFamily: 'Pretendard, sans-serif', fontSize: '12px', fontStyle: 'bold', color: '#21443b', backgroundColor: '#fffce9e8', padding: { x: 5, y: 2 } });
-    const sprite = scene.add.image(0, 30, `char_${jacket}`).setOrigin(0.5, 0.95);
+    const sprite = scene.add.image(0, 30, window.NatureArt.characterKey(jacket, false, null)).setOrigin(0.5, 0.95);
     const ring = isMe ? scene.add.ellipse(0, 21, 44, 15).setStrokeStyle(3, 0xffffff, 0.9) : null;
     label.setOrigin(0.5, 0).setPosition(0, 38);
     container.add(ring ? [ring, sprite, label] : [sprite, label]);
-    return { container, label, isMe, sprite, lastX: person.x, lastY: person.y };
+    return { container, label, isMe, sprite, color: jacket, back: false, lastX: person.x, lastY: person.y };
   }
   function ensureView(person, isMe) {
     let view = state.views.get(person.id);
@@ -185,14 +185,26 @@
   }
   // 걷는 동안 몸이 통통 튀고 살짝 기운다
   function animatePeople(time) {
+    const Art = window.NatureArt;
     state.views.forEach((view) => {
       const dx = view.container.x - view.lastX; const dy = view.container.y - view.lastY;
       view.lastX = view.container.x; view.lastY = view.container.y;
-      const moving = Math.abs(dx) + Math.abs(dy) > 0.15;
-      if (moving) { view.stepping = time; if (Math.abs(dx) > 0.1) view.tilt = dx > 0 ? 1 : -1; }
-      const active = view.stepping !== undefined && time - view.stepping < 180;
-      view.sprite.y = active ? 30 - Math.abs(Math.sin(time / 85)) * 4 : 30;
-      view.sprite.setAngle(active ? Math.sin(time / 85) * 4 : 0);
+      if (Math.abs(dx) + Math.abs(dy) > 0.15) {
+        view.stepping = time;
+        if (Math.abs(dy) > Math.abs(dx) * 0.5) view.back = dy < 0; // 위로 걸으면 뒷모습
+        if (Math.abs(dx) > 0.1) view.lean = dx > 0 ? 1 : -1;
+      }
+      const active = view.stepping !== undefined && time - view.stepping < 160;
+      let key; let bob = 0; let angle = 0;
+      if (active) {
+        const cycle = 640; const t = ((time % cycle) / cycle) * Art.WALK_FRAMES; const frame = Math.floor(t) % Art.WALK_FRAMES;
+        key = Art.characterKey(view.color, view.back, frame);
+        const phase = (t / Art.WALK_FRAMES) * Math.PI * 2;
+        bob = -Math.abs(Math.sin(phase)) * 3.5; // 발이 땅에 닿을 때 몸이 가장 낮아짐
+        angle = (view.lean || 0) * 3 + Math.sin(phase) * 1.6;
+      } else key = Art.characterKey(view.color, view.back, null);
+      if (view.sprite.texture.key !== key) view.sprite.setTexture(key);
+      view.sprite.y = 30 + bob; view.sprite.setAngle(angle);
     });
   }
   function removePeer(id) {
