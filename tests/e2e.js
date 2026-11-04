@@ -222,7 +222,7 @@ async function enterWithCode(c, code, name) {
 async function waitWorld(c) {
   return until(() => c.page.evaluate(() => !!(window.NatureGame && window.NatureGame.scene) && !document.getElementById('nature-panel').hidden), 40000);
 }
-async function waitCooldown(c) { await until(async () => (await text(c.page, '#np-cooldown')).trim() === '', 4000); }
+async function waitCooldown(c) { await c.page.waitForTimeout(2100); }
 // 후보 위치를 게임의 포인터 처리 경로(월드 좌표)로 직접 지정
 async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.NatureGame.worldPointerHandler({ x: px, y: py }, 'down'), [x, y]); }
 
@@ -314,7 +314,7 @@ async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.Nat
     check((await text(A.page, '#np-count')).includes('내 자연물 1/12'), '내 자연물 개수가 1/12로 바뀐다');
     check(await until(async () => (await B.page.evaluate(() => window.NaturePlacement.debug.objects.size)) === 1, 4000), 'B 화면에도 곧바로 나타난다');
     check(fake.count('rpc:create_nature_object') === 1, '서버 호출은 한 번뿐이다');
-    check((await text(A.page, '#np-cooldown')).includes('기다려'), '2초 쉬는 안내가 나온다');
+    check(!(await A.page.$('#np-cooldown')) && !/초 기다려/.test(await A.page.evaluate(() => document.body.innerText)), '초 단위 기다림 문구는 화면에 나오지 않는다');
     check(await A.page.locator('#np-list .np-item').count() === 1, '"내가 놓은 자연물" 목록에 한 줄 생긴다');
 
     // ===== 5. 거부 문구 (서버에 가기 전에 막는다) =====
@@ -405,7 +405,7 @@ async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.Nat
     for (const c of [B, C, Dd]) await c.context.close(); // 소프트웨어 렌더링이라 탭이 많으면 느려지므로 정리
     const E = await newClient(browser, fake, port, 'E');
     await enterWithCode(E, CODE); const okE = await waitWorld(E);
-    if (!okE) console.log('EDBG', await E.page.evaluate(() => ({msg: document.getElementById('join-message').innerText, url: location.href, hasPanel: !!document.getElementById('np-cooldown'), body: document.body.innerText.slice(0,200)})), E.errors);
+    if (!okE) console.log('EDBG', await E.page.evaluate(() => ({msg: document.getElementById('join-message').innerText, url: location.href, body: document.body.innerText.slice(0,200)})), E.errors);
     check(await E.page.locator('#np-kinds .np-kind').count() === 12, '자연물 버튼이 12개다');
     check((await E.page.evaluate(() => [...document.querySelectorAll('#np-kinds .np-kind')].every((b) => b.innerText.trim() === '' && b.querySelector('canvas') && b.getAttribute('aria-label')))), '버튼에는 글자 없이 그림(canvas)만 있고, 이름은 aria-label에만 있다');
     check((await E.page.evaluate(() => [...document.querySelectorAll('#np-kinds .np-kind')].map((b) => b.getAttribute('aria-label')).join(','))) === '돌,꽃,작은 나무,다람쥐,토끼,나비,작은 연못,갈대,덩굴,벌집,물고기,수련', '이름은 쉬운 말이다(관목 → 작은 나무)');
@@ -517,6 +517,45 @@ async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.Nat
     await dp.click('#dev-enter');
     check(await until(() => dp.evaluate(() => !document.getElementById('nature-panel').hidden && window.NaturePlacement.debug.objects.size === 2)), '시험 모드: 친구 자연물 2개가 있다');
     await dp.screenshot({ path: path.join(SHOTS, 'e2e-04-dev.png') });
+    // ----- 캐릭터: 4종, 가장자리 안 잘림, 옆모습 걷기 -----
+    const chars = await dp.evaluate(() => {
+      const Art = window.NatureArt; const tx = window.__nature.game.scene ? window.__nature.game.scene.textures : null;
+      const scene = window.NatureGame.scene; const out = { colors: Art.CHARACTER_COLORS.length, missing: [], edge: [], koalaGone: !Art.CHARACTER_COLORS.includes(0x45a85a) };
+      Art.CHARACTER_COLORS.forEach((c) => ['f', 'b', 's'].forEach((v) => [null, 0, 3, 5].forEach((f) => {
+        const key = Art.characterKey(c, v, f);
+        if (!scene.textures.exists(key)) { out.missing.push(key); return; }
+        const cv = scene.textures.get(key).getSourceImage(); const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+        let n = 0; for (let i = 0; i < cv.width; i += 1) for (let j = 0; j < cv.height; j += 1) { if ((i < 1 || j < 1 || i >= cv.width - 1 || j >= cv.height - 1) && d[(j * cv.width + i) * 4 + 3] > 12) n += 1; }
+        if (n) out.edge.push(key);
+      })));
+      out.fallback = Art.CHARACTER_COLORS.includes(Art.normalizeCharacterColor(0x45a85a));
+      return out;
+    });
+    check(chars.colors === 4 && chars.koalaGone, '동물은 4종이고 코알라는 없다');
+    check(chars.missing.length === 0, '앞·뒤·옆 모습 그림이 모두 있다', chars.missing.slice(0, 3));
+    check(chars.edge.length === 0, '캐릭터 그림 가장자리가 잘리지 않는다(바깥 줄이 모두 투명)', chars.edge.slice(0, 3));
+    check(chars.fallback, '옛 코알라 색 값이 와도 4종 중 하나로 보인다');
+    await dp.evaluate(() => document.getElementById('game').focus());
+    const meInfo = () => dp.evaluate(() => { const st = window.__nature.state; const v = st.views.get(st.me.id); return { key: v.sprite.texture.key, flip: v.sprite.flipX, dir: v.dir, x: st.me.x }; });
+    // 화면 그리기가 느린 환경이라 시간이 아니라 '충분히 움직일 때까지' 기다린다.
+    const walkWhile = async (key, moved) => {
+      const x0 = (await meInfo()); await dp.keyboard.down(key);
+      let info = null; const t0 = Date.now(); let first = null;
+      while (Date.now() - t0 < 12000) { await dp.waitForTimeout(60); info = await dp.evaluate(() => { const st = window.__nature.state; const v = st.views.get(st.me.id); return { key: v.sprite.texture.key, flip: v.sprite.flipX, dir: v.dir, x: st.me.x, y: st.me.y, turn: v.turnUntil }; }); if (!first) first = info; if (moved(info, x0)) break; }
+      return { first, info };
+    };
+    const r1 = await walkWhile('ArrowRight', (i, s) => i.x - s.x > 90 && !/idle/.test(i.key));
+    await dp.keyboard.up('ArrowRight'); await until(async () => /idle/.test((await meInfo()).key), 8000);
+    const idleR = await meInfo();
+    const r2 = await walkWhile('ArrowLeft', (i, s) => s.x - i.x > 90 && !/idle/.test(i.key));
+    await dp.keyboard.up('ArrowLeft'); await dp.waitForTimeout(400);
+    const r3 = await walkWhile('ArrowUp', (i) => /_b_/.test(i.key) && !/idle/.test(i.key));
+    await dp.keyboard.up('ArrowUp');
+    check(/_s_/.test(r1.info.key) && r1.info.flip === false && !/idle/.test(r1.info.key), '오른쪽으로 걸으면 오른쪽을 보는 옆모습으로 걷는다', r1.info);
+    check(/_s_idle$/.test(idleR.key) && idleR.flip === false, '멈추면 옆을 본 채로 선다', idleR);
+    check(/_s_/.test(r2.info.key) && r2.info.flip === true && !/idle/.test(r2.info.key), '왼쪽으로 걸으면 좌우를 뒤집어 왼쪽을 본다', r2.info);
+    check(r1.first && r1.first.dir === 's' || r1.first.dir === 'f', '걷기 시작 직후에도 오류 없이 방향이 정해진다', r1.first);
+    check(/_b_/.test(r3.info.key) && r3.info.flip === false, '위로 걸으면 뒷모습', r3.info);
     check(dErr.length === 0, '시험 모드: 콘솔 오류 없음', dErr.slice(0, 3));
   } catch (error) {
     failures += 1; console.log('  ✗ 시험 도중 예외:', error);

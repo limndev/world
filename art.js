@@ -451,74 +451,132 @@
   }
 
   // ---------- 사람 ----------
-  // 동물 후드 친구: 학생 색마다 동물이 정해져 있다. 머리가 크고 몸이 토실토실한 2~3등신 체형이고,
-  // 귀는 모두 둥글며 실제 동물(곰·토끼·쥐·판다·코알라) 모양을 따른다.
-  const ANIMALS = { 0xf27b6a: 'rabbit', 0x7146c4: 'bear', 0xf4b942: 'mouse', 0x2987c5: 'panda', 0x45a85a: 'koala' };
+  // 동물 후드 친구: 학생 색마다 동물이 정해져 있다(곰·강아지·판다·쿼카). 머리가 크고 몸이 토실토실한 2~3등신 체형.
+  // 그림은 가장자리가 잘리지 않게 사방에 여백을 두고, 2배 크기로 그려서 화면에서 절반으로 줄여 쓴다(확대해도 또렷).
+  const ANIMALS = { 0xf27b6a: 'quokka', 0x7146c4: 'bear', 0xf4b942: 'dog', 0x2987c5: 'panda' };
+  const CHARACTER_COLORS = [0xf27b6a, 0x7146c4, 0xf4b942, 0x2987c5];
+  const CHAR_W = 72; const CHAR_H = 100; const CHAR_PAD_X = 4; const CHAR_PAD_Y = 6; const CHAR_SCALE = 2;
   const FUR = {
     bear: { hood: '#b98458', ear: '#b98458', inner: '#e9bf9a', paw: '#b98458', tail: '#b98458' },
-    rabbit: { hood: '#fbf3ea', ear: '#fbf3ea', inner: '#ffc2cf', paw: '#fbf3ea', tail: '#ffffff' },
-    mouse: { hood: '#b9bcc6', ear: '#b9bcc6', inner: '#ffc2cf', paw: '#b9bcc6', tail: '#e8a8b4' },
+    dog: { hood: '#ecd2a0', ear: '#a8723f', inner: '#a8723f', paw: '#f6e8cb', tail: '#d9a766' },
     panda: { hood: '#fdfdfb', ear: '#34353c', inner: '#34353c', paw: '#34353c', tail: '#34353c' },
-    koala: { hood: '#a3a8b4', ear: '#a3a8b4', inner: '#f2f0f4', paw: '#a3a8b4', tail: null }
+    quokka: { hood: '#bfa78c', ear: '#b39a7e', inner: '#e6c9b0', paw: '#bfa78c', tail: '#b39a7e' }
   };
   const OUTLINE = 'rgba(60,40,30,0.5)';
-  // phase: null이면 서 있는 모습, 숫자면 걷는 동작의 한 장면(0~2π). back: 뒷모습(위쪽으로 걸을 때)
-  function makeCharacter(jacketColor, back, phase) {
-    const [cv, g] = canvas(64, 92); const kind = ANIMALS[jacketColor] || 'bear'; const fur = FUR[kind];
+  function normalizeCharacterColor(color) {
+    if (CHARACTER_COLORS.includes(color)) return color;
+    const n = Math.abs(Number(color) || 0);
+    return CHARACTER_COLORS[n % CHARACTER_COLORS.length];
+  }
+  // view: 'f' 앞모습, 'b' 뒷모습(위쪽으로 걸을 때), 's' 오른쪽을 보는 옆모습(왼쪽은 화면에서 좌우만 뒤집어 쓴다)
+  // phase: null이면 서 있는 모습, 숫자면 걷는 동작의 한 장면(0~2π)
+  function makeCharacter(jacketColor, view, phase) {
+    const [cv, g] = canvas(CHAR_W * CHAR_SCALE, CHAR_H * CHAR_SCALE);
+    g.scale(CHAR_SCALE, CHAR_SCALE); g.translate(CHAR_PAD_X, CHAR_PAD_Y);
+    const kind = ANIMALS[jacketColor] || 'bear'; const fur = FUR[kind]; const back = view === 'b'; const side = view === 's';
     const light = rgba(mix(jacketColor, 0xffffff, 0.4)); const base = rgba(hex(jacketColor)); const dark = rgba(mix(jacketColor, 0x1b2a28, 0.3));
     const walking = phase !== null; const s = walking ? Math.sin(phase) : 0;
-    groundShadow(g, 33, 85, 25 - Math.abs(s) * 1.5, 6.5, 0.4);
+    const stroke = (w = 1.5) => { g.strokeStyle = OUTLINE; g.lineWidth = w; g.lineJoin = 'round'; g.lineCap = 'round'; };
+    const oval = (x, y, rx, ry, rot, fill, w) => { g.fillStyle = fill; stroke(w); g.beginPath(); g.ellipse(x, y, rx, ry, rot || 0, 0, TAU); g.fill(); g.stroke(); };
+    groundShadow(g, side ? 34 : 33, 85, 25 - Math.abs(s) * 1.5, 6.5, 0.4);
+
+    if (side) {
+      const bx = 33;
+      // 먼 쪽 팔·다리(몸 뒤에 가려 어둡게)
+      oval(bx + s * 4, 58, 5.5, 8, -s * 0.2, dark, 1.4);
+      [[-s, true], [s, false]].forEach(([k, far]) => {
+        const lift = Math.max(0, k) * 6; const fx = bx + 1 + k * 7;
+        oval(fx, 77 - lift, 8.5, 6.2, 0, far ? rgba(mix(jacketColor, 0x1b2a28, 0.45)) : dark, 1.4);
+        oval(fx + 2, 80 - lift, 9, 4.4, 0, far ? fur.paw : fur.paw, 1.4);
+      });
+      // 꼬리(뒤쪽 = 왼쪽)
+      const wag = walking ? Math.sin(phase * 2) * 3 : 0;
+      if (kind === 'dog') { g.strokeStyle = fur.tail; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.moveTo(16, 66); g.quadraticCurveTo(7 - wag, 62, 8 - wag, 50); g.stroke(); }
+      else oval(14, 66, kind === 'quokka' ? 4.5 : 5.5, kind === 'quokka' ? 4.5 : 5.5, 0, fur.tail, 1.3);
+      // 몸통
+      const bg = g.createRadialGradient(26, 52, 3, 34, 62, 24); bg.addColorStop(0, light); bg.addColorStop(0.55, base); bg.addColorStop(1, dark);
+      oval(33, 62, 18.5, 17, 0, bg, 1.7);
+      g.fillStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.ellipse(40, 66, 7, 9, 0, 0, TAU); g.fill();
+      // 가까운 쪽 팔
+      oval(bx - s * 5, 58 + s * 0.5, 6, 8.5, s * 0.25, base, 1.5);
+      g.fillStyle = fur.paw; stroke(1.4); g.beginPath(); g.arc(bx - s * 5 + 1, 65.5, 4.4, 0, TAU); g.fill(); g.stroke();
+      // 귀: 먼 쪽(머리 뒤)과 가까운 쪽
+      if (kind === 'dog') { oval(42, 16, 7, 6, 0.4, fur.ear, 1.3); }
+      else { const r = kind === 'quokka' ? 6.5 : (kind === 'panda' ? 7.5 : 8); const ex = kind === 'quokka' ? 27 : 26; oval(ex + 14, 11.5, r * 0.92, r * 0.92, 0, fur.ear, 1.3); oval(ex, 11, r, r, 0, fur.ear, 1.3); g.fillStyle = fur.inner; g.beginPath(); g.arc(ex + 0.5, 11.8, r * 0.52, 0, TAU); g.fill(); }
+      // 큰 머리(후드)
+      const hg = g.createRadialGradient(26, 20, 3, 34, 32, 26); hg.addColorStop(0, '#ffffff'); hg.addColorStop(0.35, fur.hood); hg.addColorStop(1, rgba(mix(parseInt(fur.hood.slice(1), 16), 0x302018, 0.22)));
+      oval(33, 31, 23, 23, 0, hg, 1.6);
+      // 얼굴: 앞(오른쪽)으로 튀어나온 주둥이
+      const fg = g.createRadialGradient(40, 31, 2, 46, 37, 18); fg.addColorStop(0, '#ffeedb'); fg.addColorStop(1, '#f6c29b');
+      g.fillStyle = fg; g.beginPath(); g.ellipse(45, 36, 14, 14, 0, 0, TAU); g.fill();
+      const snoutLen = kind === 'dog' ? 9.5 : 6.5; const snoutX = kind === 'dog' ? 54 : 53.5;
+      g.fillStyle = kind === 'dog' ? '#fbefd6' : fg; g.beginPath(); g.ellipse(snoutX, 41, snoutLen, kind === 'dog' ? 6.6 : 6, 0, 0, TAU); g.fill(); // 테두리 없이 얼굴과 이어 붙임
+      // 눈
+      if (kind === 'panda') { g.fillStyle = '#34353c'; g.beginPath(); g.ellipse(46.5, 34.5, 5, 6.2, -0.35, 0, TAU); g.fill(); }
+      g.fillStyle = kind === 'panda' ? '#34353c' : '#2a2f45'; g.beginPath(); g.ellipse(47, 34, 2.7, 3.5, 0, 0, TAU); g.fill();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(46.3, 32.6, 1.3, 0, TAU); g.fill();
+      g.fillStyle = 'rgba(255,120,130,0.5)'; g.beginPath(); g.ellipse(42, 41, 3.3, 2.1, 0, 0, TAU); g.fill();
+      // 코와 입
+      const noseX = snoutX + snoutLen - 1.5; g.fillStyle = kind === 'panda' || kind === 'dog' || kind === 'quokka' ? '#34353c' : '#5a3a30';
+      g.beginPath(); g.ellipse(noseX, 38.5, kind === 'dog' ? 3.2 : 2.6, kind === 'dog' ? 2.5 : 2, 0, 0, TAU); g.fill();
+      g.strokeStyle = '#a84f48'; g.lineWidth = 1.4; g.lineCap = 'round'; g.beginPath(); g.arc(snoutX + 1, 41.5, kind === 'quokka' ? 4.6 : 3, 0.2, kind === 'quokka' ? 1.5 : 1.25); g.stroke();
+      if (kind === 'dog') { g.fillStyle = '#ff8fa3'; g.beginPath(); g.ellipse(snoutX + 1, 47.5, 2.3, 3, 0, 0, TAU); g.fill(); }
+      // 강아지의 늘어진 귀는 머리 옆(가까운 쪽)에 덮인다
+      if (kind === 'dog') { g.save(); g.translate(26, 24); g.rotate(0.12 + (walking ? Math.sin(phase + 1) * 0.08 : 0)); oval(0, 11, 7.5, 13.5, 0, fur.ear, 1.4); g.restore(); }
+      return cv;
+    }
+
     // 짧고 통통한 다리와 발
     [[24, -s], [41, s]].forEach(([x, k]) => {
       const lift = Math.max(0, k) * 6; const reach = k * 3;
-      g.fillStyle = dark; g.strokeStyle = OUTLINE; g.lineWidth = 1.4;
-      g.beginPath(); g.ellipse(x + k * 1.2, 77 - lift + reach * 0.4, 8.5, 6.2, 0, 0, TAU); g.fill(); g.stroke();
+      oval(x + k * 1.2, 77 - lift + reach * 0.4, 8.5, 6.2, 0, dark, 1.4);
       g.fillStyle = fur.paw; g.beginPath(); g.ellipse(x + k * 1.2, 80 - lift + reach * 0.5, 8, 4.4, 0, 0, TAU); g.fill(); g.stroke();
     });
     // 토실토실 몸통
     const bg = g.createRadialGradient(24, 52, 3, 32, 62, 24); bg.addColorStop(0, light); bg.addColorStop(0.55, base); bg.addColorStop(1, dark);
-    g.fillStyle = bg; g.strokeStyle = OUTLINE; g.lineWidth = 1.7; g.beginPath(); g.ellipse(32, 62, 21, 17, 0, 0, TAU); g.fill(); g.stroke();
+    oval(32, 62, 21, 17, 0, bg, 1.7);
     if (!back) { g.fillStyle = 'rgba(255,255,255,0.78)'; g.beginPath(); g.ellipse(32, 66, 10.5, 9, 0, 0, TAU); g.fill(); g.fillStyle = 'rgba(255,255,255,0.45)'; g.fillRect(31.2, 45, 1.8, 7); }
-    else if (fur.tail) { // 꼬리
-      g.fillStyle = fur.tail; g.strokeStyle = OUTLINE; g.lineWidth = 1.3;
-      if (kind === 'mouse') { g.strokeStyle = fur.tail; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(32, 70); g.quadraticCurveTo(48, 76, 52, 62); g.stroke(); }
-      else { g.beginPath(); g.arc(32, 68, kind === 'rabbit' ? 7.5 : 6, 0, TAU); g.fill(); if (kind !== 'panda') g.stroke(); }
+    else { // 꼬리
+      if (kind === 'dog') { g.strokeStyle = fur.tail; g.lineWidth = 5; g.lineCap = 'round'; const w = walking ? Math.sin(phase * 2) * 4 : 0; g.beginPath(); g.moveTo(32, 70); g.quadraticCurveTo(40 + w, 66, 40 + w, 56); g.stroke(); }
+      else oval(32, 68, kind === 'quokka' ? 5 : 6, kind === 'quokka' ? 5 : 6, 0, fur.tail, kind === 'panda' ? 0 : 1.3);
     }
     // 짧은 앞다리(발바닥은 동물 털색)
     [[11.5, s], [52.5, -s]].forEach(([x, k]) => {
-      const y = 58 + k * 4; g.fillStyle = base; g.strokeStyle = OUTLINE; g.lineWidth = 1.5; g.beginPath(); g.ellipse(x, y, 6, 8.5, x < 32 ? 0.25 : -0.25, 0, TAU); g.fill(); g.stroke();
-      g.fillStyle = fur.paw; g.beginPath(); g.arc(x + (x < 32 ? -1 : 1), y + 7, 4.4, 0, TAU); g.fill(); g.stroke();
+      const y = 58 + k * 4; oval(x, y, 6, 8.5, x < 32 ? 0.25 : -0.25, base, 1.5);
+      g.fillStyle = fur.paw; stroke(1.5); g.beginPath(); g.arc(x + (x < 32 ? -1 : 1), y + 7, 4.4, 0, TAU); g.fill(); g.stroke();
     });
-    // 귀
-    const sway = walking ? Math.sin(phase + 1) * 0.1 : 0;
-    const roundEar = (x, y, r) => { g.fillStyle = fur.ear; g.strokeStyle = OUTLINE; g.lineWidth = 1.3; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); g.stroke(); if (!back) { g.fillStyle = fur.inner; g.beginPath(); g.arc(x, y + 0.6, r * 0.55, 0, TAU); g.fill(); } };
+    // 귀(둥근 귀)
+    const roundEar = (x, y, r) => { oval(x, y, r, r, 0, fur.ear, 1.3); if (!back) { g.fillStyle = fur.inner; g.beginPath(); g.arc(x, y + 0.6, r * 0.55, 0, TAU); g.fill(); } };
     if (kind === 'bear') { roundEar(15, 15, 8); roundEar(49, 15, 8); }
-    else if (kind === 'mouse') { roundEar(12, 16, 10); roundEar(52, 16, 10); }
     else if (kind === 'panda') { roundEar(15, 14, 7.5); roundEar(49, 14, 7.5); }
-    else if (kind === 'koala') { roundEar(9, 21, 10.5); roundEar(55, 21, 10.5); }
-    else {
-      [[23, -0.14 - sway], [41, 0.14 + sway]].forEach(([x, r]) => { g.save(); g.translate(x, 19); g.rotate(r); g.fillStyle = fur.ear; g.strokeStyle = OUTLINE; g.lineWidth = 1.3; g.beginPath(); g.ellipse(0, -6, 6, 13, 0, 0, TAU); g.fill(); g.stroke(); if (!back) { g.fillStyle = fur.inner; g.beginPath(); g.ellipse(0, -5, 2.9, 9, 0, 0, TAU); g.fill(); } g.restore(); });
-    }
+    else if (kind === 'quokka') { roundEar(14, 16, 6.5); roundEar(50, 16, 6.5); }
+    else if (kind === 'dog') { /* 늘어진 귀는 머리 위에 따로 그린다 */ }
     // 큰 머리(후드)
     const hg = g.createRadialGradient(24, 20, 3, 32, 32, 26); hg.addColorStop(0, '#ffffff'); hg.addColorStop(0.35, fur.hood); hg.addColorStop(1, rgba(mix(parseInt(fur.hood.slice(1), 16), 0x302018, 0.22)));
-    g.fillStyle = hg; g.strokeStyle = OUTLINE; g.lineWidth = 1.6; g.beginPath(); g.arc(32, 31, 23, 0, TAU); g.fill(); g.stroke();
-    if (back) { g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.ellipse(23, 19, 8, 3, -0.5, 0, TAU); g.fill(); return cv; }
+    oval(32, 31, 23, 23, 0, hg, 1.6);
+    const floppy = () => { [[10.5, 0.18], [53.5, -0.18]].forEach(([x, r]) => { g.save(); g.translate(x, 20); g.rotate(r + (walking ? Math.sin(phase + 1) * 0.06 * (x < 32 ? 1 : -1) : 0)); oval(0, 11, 7.2, 13.5, 0, fur.ear, 1.4); g.restore(); }); };
+    if (back) { g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.ellipse(23, 19, 8, 3, -0.5, 0, TAU); g.fill(); if (kind === 'dog') floppy(); return cv; }
     // 얼굴
     const fg = g.createRadialGradient(26, 31, 2, 32, 37, 18); fg.addColorStop(0, '#ffeedb'); fg.addColorStop(1, '#f6c29b');
     g.fillStyle = fg; g.beginPath(); g.ellipse(32, 35, 17, 15, 0, 0, TAU); g.fill();
+    if (kind === 'dog') { g.fillStyle = '#fbefd6'; g.beginPath(); g.ellipse(32, 41, 9, 6.8, 0, 0, TAU); g.fill(); }
     if (kind === 'panda') { g.fillStyle = '#34353c'; g.beginPath(); g.ellipse(25, 34, 5.2, 6.4, 0.35, 0, TAU); g.ellipse(39, 34, 5.2, 6.4, -0.35, 0, TAU); g.fill(); }
     g.fillStyle = kind === 'panda' ? '#34353c' : '#2a2f45'; g.beginPath(); g.ellipse(25, 34, 2.7, 3.5, 0, 0, TAU); g.ellipse(39, 34, 2.7, 3.5, 0, 0, TAU); g.fill();
     g.fillStyle = '#fff'; g.beginPath(); g.arc(24.2, 32.6, 1.3, 0, TAU); g.arc(38.2, 32.6, 1.3, 0, TAU); g.fill();
     g.fillStyle = 'rgba(255,120,130,0.5)'; g.beginPath(); g.ellipse(19, 40, 3.3, 2.1, 0, 0, TAU); g.ellipse(45, 40, 3.3, 2.1, 0, 0, TAU); g.fill();
-    if (kind === 'koala') { g.fillStyle = '#3a3a44'; g.beginPath(); g.ellipse(32, 38.5, 3.6, 2.7, 0, 0, TAU); g.fill(); }
+    if (kind === 'dog') { g.fillStyle = '#34353c'; g.beginPath(); g.ellipse(32, 38.2, 3.4, 2.5, 0, 0, TAU); g.fill(); }
+    else if (kind === 'quokka') { g.fillStyle = '#34353c'; g.beginPath(); g.ellipse(32, 38, 3.2, 2.3, 0, 0, TAU); g.fill(); }
     else if (kind === 'panda') { g.fillStyle = '#34353c'; g.beginPath(); g.ellipse(32, 38, 2.4, 1.8, 0, 0, TAU); g.fill(); }
-    else { g.fillStyle = kind === 'rabbit' || kind === 'mouse' ? '#ff8fa3' : '#5a3a30'; g.beginPath(); g.ellipse(32, 38, 2.3, 1.7, 0, 0, TAU); g.fill(); }
-    g.strokeStyle = '#a84f48'; g.lineWidth = 1.5; g.lineCap = 'round'; g.beginPath(); g.arc(32, 40, 3, 0.3, Math.PI - 0.3); g.stroke();
-    if (kind === 'rabbit') { g.fillStyle = '#fff'; g.fillRect(30.6, 42.2, 1.5, 2.2); g.fillRect(32.2, 42.2, 1.5, 2.2); }
+    else { g.fillStyle = '#5a3a30'; g.beginPath(); g.ellipse(32, 38, 2.3, 1.7, 0, 0, TAU); g.fill(); }
+    g.strokeStyle = '#a84f48'; g.lineWidth = 1.5; g.lineCap = 'round'; g.beginPath();
+    if (kind === 'quokka') g.arc(32, 38.6, 6.2, 0.2, Math.PI - 0.2); else g.arc(32, 40, 3, 0.3, Math.PI - 0.3);
+    g.stroke();
+    if (kind === 'dog') { g.fillStyle = '#ff8fa3'; g.beginPath(); g.ellipse(32, 45.6, 2.2, 2.8, 0, 0, TAU); g.fill(); }
+    if (kind === 'dog') floppy();
     return cv;
   }
   const WALK_FRAMES = 8;
-  function characterKey(color, back, frame) { return `char_${color}_${back ? 'b' : 'f'}_${frame === null ? 'idle' : frame}`; }
+  function characterKey(color, view, frame) { return `char_${color}_${view === true ? 'b' : (view || 'f')}_${frame === null ? 'idle' : frame}`; }
 
   // ---------- 빛 덮개(화면에 고정) ----------
   function makeLight(w, h) {
@@ -776,7 +834,6 @@
     ['bench', 300, 1190, 0.8]
   ];
 
-  const CHARACTER_COLORS = [0xf27b6a, 0x7146c4, 0xf4b942, 0x2987c5, 0x45a85a];
 
   function registerTextures(scene) {
     const tx = scene.textures;
@@ -788,9 +845,9 @@
     add('obj_pond', makePond()); add('obj_reed', makeReedTall()); add('obj_vine', makeVine()); add('obj_hive', makeHive()); add('obj_bee', makeBee());
     add('obj_fish', makeFish()); add('obj_lily', makeWaterlily());
     add('fallenBranch', makeBranch()); add('grassTuft', makeTuft()); add('lilyReeds', makeReeds()); add('bench', makeBench());
-    CHARACTER_COLORS.forEach((c) => [false, true].forEach((back) => {
-      add(characterKey(c, back, null), makeCharacter(c, back, null));
-      for (let f = 0; f < WALK_FRAMES; f += 1) add(characterKey(c, back, f), makeCharacter(c, back, (f / WALK_FRAMES) * TAU));
+    CHARACTER_COLORS.forEach((c) => ['f', 'b', 's'].forEach((view) => {
+      add(characterKey(c, view, null), makeCharacter(c, view, null));
+      for (let f = 0; f < WALK_FRAMES; f += 1) add(characterKey(c, view, f), makeCharacter(c, view, (f / WALK_FRAMES) * TAU));
     }));
     add('lightOverlay', makeLight(960, 600));
   }
@@ -808,5 +865,5 @@
     return sway;
   }
 
-  return { registerTextures, placeFlora, CHARACTER_COLORS, characterKey, WALK_FRAMES };
+  return { registerTextures, placeFlora, CHARACTER_COLORS, characterKey, normalizeCharacterColor, WALK_FRAMES, CHAR_ORIGIN_Y: (87.4 + CHAR_PAD_Y) / CHAR_H, CHAR_DISPLAY_SCALE: 1 / CHAR_SCALE };
 });

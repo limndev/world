@@ -50,7 +50,6 @@ button:focus-visible, input:focus-visible, .download-link:focus-visible { outlin
 #nature-panel button.danger { background: #b72d3b; color: #fff; }
 #nature-panel button:disabled { background: #9aa99f; color: #fff; cursor: not-allowed; }
 #np-status { min-height: 3em; margin: 12px 0 0; padding: 9px 10px; background: #f0f5ef; border-radius: 8px; line-height: 1.5; }
-.np-cooldown { min-height: 1.3em; margin: 6px 0 0; color: #76520b; font-size: .9rem; }
 .np-count { margin: 8px 0 0; color: #3b6a58; font-size: .92rem; }
 #np-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 #nature-panel .np-item { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; min-height: 0; padding: 2px; background: #f1f8ee; color: #173c36; border: 2px solid #c9dec8; border-radius: 10px; }

@@ -66,7 +66,7 @@
   }
   function savedName() { try { return cleanName(window.localStorage.getItem(NAME_KEY)); } catch (error) { return ''; } }
   function saveName(name) { try { window.localStorage.setItem(NAME_KEY, name); } catch (error) { /* 저장 못 해도 입장은 된다 */ } }
-  function makePerson(id, name) { const color = [0xf27b6a, 0x7146c4, 0xf4b942, 0x2987c5, 0x45a85a][hash(id) % 5]; return { id, name: cleanName(name) || `탐험가 ${id.slice(-4)}`, color, x: 560 + (hash(id) % 8) * 46, y: 510 + (hash(id) % 6) * 38, seq: 0, timestamp: Date.now() }; }
+  function makePerson(id, name) { const color = window.NatureArt.CHARACTER_COLORS[hash(id) % window.NatureArt.CHARACTER_COLORS.length]; return { id, name: cleanName(name) || `탐험가 ${id.slice(-4)}`, color, x: 560 + (hash(id) % 8) * 46, y: 510 + (hash(id) % 6) * 38, seq: 0, timestamp: Date.now() }; }
   function setStatus(text) { elements.status.textContent = text; }
 
   class NatureScene extends Phaser.Scene {
@@ -216,13 +216,13 @@
   function buildPersonView(person, isMe) {
     const scene = state.scene;
     const container = scene.add.container(person.x, person.y).setName(`person-${person.id}`).setDepth(1000 + person.y + FOOT_DY);
-    const jacket = person.color;
+    const Art = window.NatureArt; const jacket = Art.normalizeCharacterColor(person.color); // 옛 색 값이 와도 4종 중 하나로 맞춘다
     const label = scene.add.text(-39, 29, isMe ? '나' : person.name, { fontFamily: 'Pretendard, sans-serif', fontSize: '12px', fontStyle: 'bold', color: '#21443b', backgroundColor: '#fffce9e8', padding: { x: 5, y: 2 } });
-    const sprite = scene.add.image(0, 30, window.NatureArt.characterKey(jacket, false, null)).setOrigin(0.5, 0.95);
+    const sprite = scene.add.image(0, 30, Art.characterKey(jacket, 'f', null)).setOrigin(0.5, Art.CHAR_ORIGIN_Y).setScale(Art.CHAR_DISPLAY_SCALE);
     const ring = isMe ? scene.add.ellipse(0, 21, 44, 15).setStrokeStyle(3, 0xffffff, 0.9) : null;
     label.setOrigin(0.5, 0).setPosition(0, 38);
     container.add(ring ? [ring, sprite, label] : [sprite, label]);
-    return { container, label, isMe, sprite, color: jacket, back: false, lastX: person.x, lastY: person.y };
+    return { container, label, isMe, sprite, color: jacket, dir: 'f', faceLeft: false, turnUntil: 0, lastX: person.x, lastY: person.y };
   }
   function ensureView(person, isMe) {
     let view = state.views.get(person.id);
@@ -247,6 +247,7 @@
     });
   }
   // 걷는 동안 몸이 통통 튀고 살짝 기운다. 걸음 그림은 시간이 아니라 '걸은 거리'로 넘겨서, 빨리 걸으면 빨리·천천히 걸으면 천천히 발이 움직이고 멈추면 바로 선다.
+  const TURN_MS = 130; // 방향을 바꾼 뒤 걷기 시작하기까지 몸을 돌리는 시간
   const STRIDE_PX = 14.5; // 걸음 그림 한 장이 넘어가는 거리(8장이 한 걸음 주기)
   function animatePeople(time) {
     const Art = window.NatureArt;
@@ -262,15 +263,25 @@
       const moving = view.speed > 14;
       let key; let bob = 0; let target = 0;
       if (moving) {
-        view.phaseDist = (view.phaseDist || 0) + dist;
-        if (Math.abs(view.vy) > Math.abs(view.vx) * 0.5) view.back = view.vy < 0; // 위로 걸으면 뒷모습
-        const frame = Math.floor(view.phaseDist / STRIDE_PX) % Art.WALK_FRAMES;
-        key = Art.characterKey(view.color, view.back, frame);
-        const phase = (view.phaseDist / (STRIDE_PX * Art.WALK_FRAMES)) * Math.PI * 2;
-        bob = -Math.abs(Math.sin(phase)) * 3.5; // 발이 땅에 닿을 때 몸이 가장 낮아짐
-        const lean = Math.max(-1, Math.min(1, view.vx / 150));
-        target = lean * 3 + Math.sin(phase) * 1.6;
-      } else key = Art.characterKey(view.color, view.back, null);
+        // 보는 방향: 좌우로 걸으면 옆모습(왼쪽은 좌우 뒤집기), 위는 뒷모습, 아래는 앞모습. 비스듬히 걸을 땐 더 크게 움직이는 쪽을 따른다.
+        const ax = Math.abs(view.vx); const ay = Math.abs(view.vy);
+        let dir = view.dir; let faceLeft = view.faceLeft;
+        if (ax > ay * 1.15) { dir = 's'; faceLeft = view.vx < 0; }
+        else if (ay > ax * 1.15) dir = view.vy < 0 ? 'b' : 'f';
+        if (dir !== view.dir || (dir === 's' && faceLeft !== view.faceLeft)) { view.turnUntil = time + TURN_MS; view.phaseDist = 0; } // 방향이 바뀌면 먼저 그쪽을 바라본 뒤 걷기 시작
+        view.dir = dir; view.faceLeft = faceLeft;
+        if (time < view.turnUntil) key = Art.characterKey(view.color, view.dir, null);
+        else {
+          view.phaseDist = (view.phaseDist || 0) + dist;
+          const frame = Math.floor(view.phaseDist / STRIDE_PX) % Art.WALK_FRAMES;
+          key = Art.characterKey(view.color, view.dir, frame);
+          const phase = (view.phaseDist / (STRIDE_PX * Art.WALK_FRAMES)) * Math.PI * 2;
+          bob = -Math.abs(Math.sin(phase)) * 3.5; // 발이 땅에 닿을 때 몸이 가장 낮아짐
+          const lean = view.dir === 's' ? 0 : Math.max(-1, Math.min(1, view.vx / 150));
+          target = lean * 3 + Math.sin(phase) * 1.6;
+        }
+      } else key = Art.characterKey(view.color, view.dir, null);
+      view.sprite.setFlipX(view.dir === 's' && view.faceLeft);
       if (view.sprite.texture.key !== key) view.sprite.setTexture(key);
       view.angle = (view.angle || 0) + (target - (view.angle || 0)) * 0.25; // 기울기도 부드럽게
       view.sprite.y = FOOT_DY + bob; view.sprite.setAngle(view.angle);

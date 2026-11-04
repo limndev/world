@@ -26,7 +26,7 @@
 
   const els = () => ({
     panel: $('nature-panel'), note: $('np-note'), kinds: $('np-kinds'), confirm: $('np-confirm'), cancel: $('np-cancel'),
-    status: $('np-status'), cooldown: $('np-cooldown'), count: $('np-count'), list: $('np-list'), selected: $('np-selected'),
+    status: $('np-status'), count: $('np-count'), list: $('np-list'), selected: $('np-selected'),
     selTitle: $('np-sel-title'), selText: $('np-sel-text'), move: $('np-move'), del: $('np-delete'), deselect: $('np-deselect'),
     worldState: $('world-state'), game: $('game')
   });
@@ -337,7 +337,6 @@
     clearInterval(cooldownTimer);
     const tick = () => {
       const left = Math.max(0, cooldownUntil - Date.now());
-      E.cooldown.textContent = left ? `다음 변경까지 ${(left / 1000).toFixed(1)}초 기다려 주세요.` : '';
       if (!left) { clearInterval(cooldownTimer); E.move.disabled = false; E.del.disabled = false; if (placing) refreshCandidate(false); }
     };
     E.move.disabled = true; E.del.disabled = true; if (placing) E.confirm.disabled = true;
