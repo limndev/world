@@ -1,5 +1,5 @@
 /*
- * 링크 미리보기 그림(og-image.png)과 파비콘(favicon.png/apple-touch-icon.png)을 만든다.
+ * 링크 미리보기 그림 초안(tools/og-draft.png, 실제 og-image.png는 직접 그린 그림으로 교체됨)과 파비콘(favicon.png/apple-touch-icon.png)을 만든다.
  * 실행: NODE_PATH=<playwright 위치> node tools/make-og.js   (서버 필요 없음)
  * 동물 그림은 art.js의 캐릭터 그리기를 그대로 쓰고, 초원 배경만 여기서 그린다.
  */
@@ -67,7 +67,7 @@ const ROOT = path.join(__dirname, '..');
     butterfly(150, 300, 1.7, '#ff9fc0'); butterfly(1060, 250, 1.4, '#ffd24d');
     g.fillStyle = 'rgba(255,255,255,0.9)'; [[300, 160, 6], [880, 70, 5], [720, 240, 4]].forEach(([x, y, r]) => { g.beginPath(); g.moveTo(x, y - r * 2); g.quadraticCurveTo(x, y, x + r * 2, y); g.quadraticCurveTo(x, y, x, y + r * 2); g.quadraticCurveTo(x, y, x - r * 2, y); g.quadraticCurveTo(x, y, x, y - r * 2); g.fill(); });
   });
-  await (await page.$('#c')).screenshot({ path: path.join(ROOT, 'og-image.png') });
+  await (await page.$('#c')).screenshot({ path: path.join(__dirname, 'og-draft.png') });
 
   // 파비콘: 초원 그림(favicon.svg)을 PNG로도 만들어 둔다(옛 브라우저·홈 화면 추가용)
   const svg = fs.readFileSync(path.join(__dirname, 'favicon.svg'), 'utf8');

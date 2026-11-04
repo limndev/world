@@ -15,7 +15,7 @@
   const WORLD_WIDTH = R.WORLD_WIDTH;
   const WORLD_HEIGHT = R.WORLD_HEIGHT;
   const VIEWPORT_WIDTH = 960;
-  const VIEWPORT_HEIGHT = 600;
+  const VIEWPORT_HEIGHT = 830;
   const LAND_SPEED = 185;
   const WATER_SPEED = 86;
   const FOOT_DY = 30; // 캐릭터 그림의 발 위치(몸 중심에서 아래로). 막힘 판정과 앞뒤 가림(깊이)은 발을 기준으로 한다.

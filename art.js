@@ -850,7 +850,7 @@
       add(characterKey(c, view, null), makeCharacter(c, view, null));
       for (let f = 0; f < WALK_FRAMES; f += 1) add(characterKey(c, view, f), makeCharacter(c, view, (f / WALK_FRAMES) * TAU));
     }));
-    add('lightOverlay', makeLight(960, 600));
+    add('lightOverlay', makeLight(960, 830));
   }
 
   // 나무·덤불 등을 장면에 놓는다. 뿌리 높이를 기준으로 사람과 앞뒤가 맞게 겹친다.

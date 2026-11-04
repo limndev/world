@@ -479,7 +479,7 @@ async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.Nat
     check(nearRock.x > rockRow.x - 24 - 13 - 12, '돌 바로 앞까지는 간다', { me: nearRock.x, rock: rockRow.x });
     // 비스듬히 부딪히면 옆으로 미끄러진다
     await E.page.evaluate((r) => { const m = window.NatureGame.getMe(); m.x = r.x - 90; m.y = r.y - 30 - 40; window.NatureGame.scene.anchor.setPosition(m.x, m.y); window.NatureGame.scene.vel = { x: 0, y: 0 }; }, rockRow);
-    await E.page.keyboard.down('ArrowRight'); await E.page.keyboard.down('ArrowDown'); await sleep(1800); await E.page.keyboard.up('ArrowRight'); await E.page.keyboard.up('ArrowDown');
+    await E.page.keyboard.down('ArrowRight'); await E.page.keyboard.down('ArrowDown'); await until(() => E.page.evaluate((rx) => window.NatureGame.getMe().x > rx + 40, rockRow.x), 12000, 100); await E.page.keyboard.up('ArrowRight'); await E.page.keyboard.up('ArrowDown'); // 화면이 느린 환경에서도 같게: 시간이 아니라 목표 지점까지 기다림
     const slid = await E.page.evaluate(() => window.NatureGame.getMe());
     check(slid.x > rockRow.x + 20, '비스듬히 부딪히면 돌 옆으로 미끄러져 지나간다', { slid, rock: rockRow });
     const dist = Math.hypot(slid.x - rockRow.x, slid.y + 30 - rockRow.y);
@@ -487,7 +487,7 @@ async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.Nat
     // 꽃은 지나갈 수 있다
     const flowerRow = await E.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].find((o) => o.kind === 'wildflower'));
     await E.page.evaluate((r) => { const m = window.NatureGame.getMe(); m.x = r.x - 100; m.y = r.y - 30; window.NatureGame.scene.anchor.setPosition(m.x, m.y); window.NatureGame.scene.vel = { x: 0, y: 0 }; }, flowerRow);
-    await walk(E.page, 'ArrowRight', 1200);
+    await E.page.keyboard.down('ArrowRight'); await until(() => E.page.evaluate((fx) => window.NatureGame.getMe().x > fx + 20, flowerRow.x), 12000, 100); await E.page.keyboard.up('ArrowRight');
     check((await E.page.evaluate(() => window.NatureGame.getMe().x)) > flowerRow.x + 20, '꽃밭은 지나갈 수 있다');
     // 이미 있던 나무 줄기(225,205)
     await E.page.evaluate(() => { const m = window.NatureGame.getMe(); m.x = 120; m.y = 175; window.NatureGame.scene.anchor.setPosition(m.x, m.y); window.NatureGame.scene.vel = { x: 0, y: 0 }; });
