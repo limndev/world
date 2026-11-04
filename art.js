@@ -470,9 +470,10 @@
   }
   // view: 'f' 앞모습, 'b' 뒷모습(위쪽으로 걸을 때), 's' 오른쪽을 보는 옆모습(왼쪽은 화면에서 좌우만 뒤집어 쓴다)
   // phase: null이면 서 있는 모습, 숫자면 걷는 동작의 한 장면(0~2π)
-  function makeCharacter(jacketColor, view, phase) {
-    const [cv, g] = canvas(CHAR_W * CHAR_SCALE, CHAR_H * CHAR_SCALE);
-    g.scale(CHAR_SCALE, CHAR_SCALE); g.translate(CHAR_PAD_X, CHAR_PAD_Y);
+  function makeCharacter(jacketColor, view, phase, scaleOverride) {
+    const sc = scaleOverride || CHAR_SCALE; // 기본 2배. 썸네일처럼 크게 쓸 때만 더 키운다
+    const [cv, g] = canvas(Math.round(CHAR_W * sc), Math.round(CHAR_H * sc));
+    g.scale(sc, sc); g.translate(CHAR_PAD_X, CHAR_PAD_Y);
     const kind = ANIMALS[jacketColor] || 'bear'; const fur = FUR[kind]; const back = view === 'b'; const side = view === 's';
     const light = rgba(mix(jacketColor, 0xffffff, 0.4)); const base = rgba(hex(jacketColor)); const dark = rgba(mix(jacketColor, 0x1b2a28, 0.3));
     const walking = phase !== null; const s = walking ? Math.sin(phase) : 0;
@@ -865,5 +866,5 @@
     return sway;
   }
 
-  return { registerTextures, placeFlora, CHARACTER_COLORS, characterKey, normalizeCharacterColor, WALK_FRAMES, CHAR_ORIGIN_Y: (87.4 + CHAR_PAD_Y) / CHAR_H, CHAR_DISPLAY_SCALE: 1 / CHAR_SCALE };
+  return { registerTextures, placeFlora, CHARACTER_COLORS, makeCharacter, characterKey, normalizeCharacterColor, WALK_FRAMES, CHAR_ORIGIN_Y: (87.4 + CHAR_PAD_Y) / CHAR_H, CHAR_DISPLAY_SCALE: 1 / CHAR_SCALE };
 });

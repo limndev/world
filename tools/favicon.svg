@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc8f0"/><stop offset="1" stop-color="#e6f7ff"/></linearGradient>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a5db86"/><stop offset="1" stop-color="#7cc765"/></linearGradient>
+    <linearGradient id="near" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fd05a"/><stop offset="1" stop-color="#4fa545"/></linearGradient>
+    <clipPath id="r"><rect width="64" height="64" rx="14"/></clipPath>
+  </defs>
+  <g clip-path="url(#r)">
+    <rect width="64" height="64" fill="url(#sky)"/>
+    <circle cx="46" cy="18" r="9" fill="#ffd95a"/>
+    <circle cx="46" cy="18" r="6.5" fill="#fff3a6"/>
+    <ellipse cx="17" cy="16" rx="9" ry="4" fill="#fff"/><ellipse cx="23" cy="13.5" rx="6" ry="4" fill="#fff"/>
+    <path d="M-4 40 Q14 26 34 37 T70 33 V70 H-4Z" fill="url(#far)"/>
+    <path d="M-4 50 Q20 38 42 48 T70 45 V70 H-4Z" fill="url(#near)"/>
+    <g>
+      <circle cx="14" cy="53" r="2.4" fill="#fff"/><circle cx="14" cy="53" r="1" fill="#ffcf3d"/>
+      <circle cx="30" cy="57" r="2.4" fill="#ff9fb8"/><circle cx="30" cy="57" r="1" fill="#ffcf3d"/>
+      <circle cx="48" cy="54" r="2.4" fill="#fff"/><circle cx="48" cy="54" r="1" fill="#ffcf3d"/>
+      <circle cx="56" cy="59" r="2" fill="#ffd95a"/>
+    </g>
+  </g>
+</svg>
