@@ -10,7 +10,7 @@
 
   const WORLD_ID = 'nature-prototype';
   const CHANNEL_NAME = `world:${WORLD_ID}`;
-  const POSITION_INTERVAL = 300; // 위치 전송 간격(ms). 메시지 수를 줄이려고 이전(200)보다 늘림
+  const POSITION_INTERVAL = 250; // 위치 전송 간격(ms). 메시지 수를 줄이려고 이전(200)보다 늘림
   const PRESENCE_REFRESH = 15000; // 접속 상태는 입장할 때와 이 간격으로만 갱신(움직일 때마다 보내지 않음)
   const WORLD_WIDTH = R.WORLD_WIDTH;
   const WORLD_HEIGHT = R.WORLD_HEIGHT;
@@ -18,6 +18,18 @@
   const VIEWPORT_HEIGHT = 600;
   const LAND_SPEED = 185;
   const WATER_SPEED = 86;
+  const FOOT_DY = 30; // 캐릭터 그림의 발 위치(몸 중심에서 아래로). 막힘 판정과 앞뒤 가림(깊이)은 발을 기준으로 한다.
+  const FOOT_R = 13; // 발 둘레 반경
+  const ACCEL_TIME = 0.09; // 걷기 시작할 때 속도가 붙는 시간 상수(초)
+  const DECEL_TIME = 0.06; // 멈출 때 속도가 줄어드는 시간 상수(초)
+  // 이미 그려져 있는 나무·덤불·바위·벤치의 몸통(캐릭터가 뚫고 지나가지 않는 부분). 꽃밭은 지나갈 수 있다.
+  const SB = R.STATIC_BLOCKERS;
+  const STATIC_COLLIDERS = [
+    ...SB.slice(0, 6).map((b) => ({ x: b.x, y: b.y, r: 22 })), // 나무 줄기
+    ...SB.slice(6, 11).map((b) => ({ x: b.x, y: b.y, r: Math.round(b.r * 0.52) })), // 덤불
+    ...SB.slice(14, 18).map((b) => ({ x: b.x, y: b.y, r: Math.round(b.r * 0.62) })), // 바위
+    { x: 300, y: 1190, r: 34 } // 벤치
+  ];
   const ZONES = R.ZONES;
   const WATER_AREAS = R.WATER_AREAS;
   const isWater = R.isWater;
@@ -103,30 +115,67 @@
         this.drawAmbient(this.ambientTime / 1000);
         this.lastAmbientPaint = this.ambientTime;
       }
-      smoothPeers(delta);
+      smoothPeers();
       animatePeople(this.ambientTime);
       if (this.sway) this.sway.forEach((s) => { s.image.setAngle(Math.sin(this.ambientTime / 1000 * 0.9 + s.phase) * s.amp); });
       if (state.hudDirty && this.ambientTime - state.lastHud > 250) { renderHud(); state.lastHud = this.ambientTime; }
-      if (!state.connected || game.inputLocked) return; // 자연물을 놓는 중에는 캐릭터가 걷지 않는다
-      const direction = new Phaser.Math.Vector2();
-      if (this.cursors.left.isDown) direction.x -= 1;
-      if (this.cursors.right.isDown) direction.x += 1;
-      if (this.cursors.up.isDown) direction.y -= 1;
-      if (this.cursors.down.isDown) direction.y += 1;
-      if (direction.lengthSq() === 0 && this.touchTarget) {
-        direction.set(this.touchTarget.x - state.me.x, this.touchTarget.y - state.me.y);
-        if (direction.length() < 12) { this.touchTarget = null; direction.set(0, 0); }
-      }
-      if (direction.lengthSq() === 0) return;
-      direction.normalize();
-      const speed = isWater(state.me) ? WATER_SPEED : LAND_SPEED;
-      state.me.x = Phaser.Math.Clamp(state.me.x + direction.x * speed * (delta / 1000), 38, WORLD_WIDTH - 38);
-      state.me.y = Phaser.Math.Clamp(state.me.y + direction.y * speed * (delta / 1000), 58, WORLD_HEIGHT - 38);
-      this.anchor.setPosition(state.me.x, state.me.y);
-      state.me.timestamp = Date.now();
-      placeMyView();
-      state.hudDirty = true;
+      if (window.NaturePlacement && window.NaturePlacement.animate) window.NaturePlacement.animate(this.ambientTime);
+      if (!state.connected) return;
+      // 화면이 느려도(프레임이 길어도) 걷는 속도가 시계와 같도록 하되, 한 번에 너무 크게 움직이지 않게 잘게 나눠서 계산한다.
+      let left = Math.min(delta, 100) / 1000;
+      while (left > 0.0001) { const step = Math.min(left, 1 / 30); this.stepPlayer(step); left -= step; }
       sendLocation();
+    }
+    // 걷기: 속도가 서서히 붙고 서서히 줄며, 자연물에 닿으면 막혀서 옆으로 미끄러진다.
+    stepPlayer(dt) {
+      const me = state.me;
+      const vel = this.vel || (this.vel = { x: 0, y: 0 });
+      let dx = 0; let dy = 0;
+      if (!game.inputLocked) { // 자연물을 놓는 중에는 걷지 않는다(미끄러지던 속도는 줄어든다)
+        if (this.cursors.left.isDown) dx -= 1;
+        if (this.cursors.right.isDown) dx += 1;
+        if (this.cursors.up.isDown) dy -= 1;
+        if (this.cursors.down.isDown) dy += 1;
+      }
+      let scale = 1;
+      if (dx === 0 && dy === 0 && this.touchTarget && !game.inputLocked) {
+        dx = this.touchTarget.x - me.x; dy = this.touchTarget.y - (me.y + FOOT_DY);
+        const dist = Math.hypot(dx, dy);
+        if (dist < 8) { this.touchTarget = null; dx = 0; dy = 0; } else scale = Math.min(1, Math.max(0.3, dist / 70)); // 목표 가까이에서 속도를 줄인다
+      }
+      const len = Math.hypot(dx, dy);
+      const wet = isWater(me) || (window.NaturePlacement && window.NaturePlacement.inPond(me.x, me.y + FOOT_DY));
+      const top = (wet ? WATER_SPEED : LAND_SPEED) * scale;
+      const tvx = len ? (dx / len) * top : 0; const tvy = len ? (dy / len) * top : 0;
+      const k = 1 - Math.exp(-dt / (len ? ACCEL_TIME : DECEL_TIME));
+      vel.x += (tvx - vel.x) * k; vel.y += (tvy - vel.y) * k;
+      if (!len && Math.hypot(vel.x, vel.y) < 4) { vel.x = 0; vel.y = 0; }
+      const ox = me.x; const oy = me.y;
+      let fx = me.x + vel.x * dt; let fy = me.y + FOOT_DY + vel.y * dt;
+      // 자연물 막힘: 발 둘레가 몸통 둘레와 겹치면 바깥쪽으로 밀어내고, 부딪히는 쪽 속도만 없앤다(옆으로 미끄러짐)
+      const blockers = STATIC_COLLIDERS.concat(window.NaturePlacement ? window.NaturePlacement.colliders() : []);
+      for (let pass = 0; pass < 2; pass += 1) {
+        for (let i = 0; i < blockers.length; i += 1) {
+          const c = blockers[i]; const min = c.r + FOOT_R;
+          const ex = fx - c.x; const ey = fy - c.y;
+          if (Math.abs(ex) >= min || Math.abs(ey) >= min) continue;
+          const d = Math.hypot(ex, ey);
+          if (d >= min) continue;
+          const nx = d > 0.001 ? ex / d : 0; const ny = d > 0.001 ? ey / d : 1;
+          fx += nx * (min - d); fy += ny * (min - d);
+          const vn = vel.x * nx + vel.y * ny;
+          if (vn < 0) { vel.x -= vn * nx; vel.y -= vn * ny; }
+        }
+      }
+      me.x = Phaser.Math.Clamp(fx, 38, WORLD_WIDTH - 38);
+      me.y = Phaser.Math.Clamp(fy - FOOT_DY, 58, WORLD_HEIGHT - 38 - FOOT_DY);
+      if (Math.abs(me.x - ox) + Math.abs(me.y - oy) > 0.02) {
+        this.anchor.setPosition(me.x, me.y);
+        me.timestamp = Date.now();
+        state.posDirty = true;
+        placeMyView();
+        state.hudDirty = true;
+      }
     }
     drawWorld() {
       const Art = window.NatureArt;
@@ -166,7 +215,7 @@
   // ---------- 사람(캐릭터) 그리기: 한 번 만들고 위치만 옮긴다 ----------
   function buildPersonView(person, isMe) {
     const scene = state.scene;
-    const container = scene.add.container(person.x, person.y).setName(`person-${person.id}`).setDepth(1000 + person.y);
+    const container = scene.add.container(person.x, person.y).setName(`person-${person.id}`).setDepth(1000 + person.y + FOOT_DY);
     const jacket = person.color;
     const label = scene.add.text(-39, 29, isMe ? '나' : person.name, { fontFamily: 'Pretendard, sans-serif', fontSize: '12px', fontStyle: 'bold', color: '#21443b', backgroundColor: '#fffce9e8', padding: { x: 5, y: 2 } });
     const sprite = scene.add.image(0, 30, window.NatureArt.characterKey(jacket, false, null)).setOrigin(0.5, 0.95);
@@ -183,40 +232,48 @@
   function placeMyView() {
     if (!state.scene) return;
     const view = ensureView(state.me, true);
-    view.container.setPosition(state.me.x, state.me.y).setDepth(1000 + state.me.y);
+    view.container.setPosition(state.me.x, state.me.y).setDepth(1000 + state.me.y + FOOT_DY);
   }
-  function smoothPeers(delta) {
-    const k = Math.min(1, delta / 140);
+  // 다른 사람: 새 위치가 올 때마다 지금 보이는 자리에서 새 자리까지 일정한 속도로 이어서 움직인다(뚝뚝 끊기지 않게).
+  function smoothPeers() {
+    const now = Date.now();
     state.peers.forEach((peer) => {
       const view = state.views.get(peer.id);
-      if (!view) return;
-      view.container.x += (peer.x - view.container.x) * k;
-      view.container.y += (peer.y - view.container.y) * k;
-      view.container.setDepth(1000 + view.container.y);
+      if (!view || !peer.seg) return;
+      const seg = peer.seg;
+      const t = Math.min(1, Math.max(0, (now - seg.t0) / seg.dur));
+      view.container.setPosition(seg.fx + (seg.tx - seg.fx) * t, seg.fy + (seg.ty - seg.fy) * t);
+      view.container.setDepth(1000 + view.container.y + FOOT_DY);
     });
   }
-  // 걷는 동안 몸이 통통 튀고 살짝 기운다
+  // 걷는 동안 몸이 통통 튀고 살짝 기운다. 걸음 그림은 시간이 아니라 '걸은 거리'로 넘겨서, 빨리 걸으면 빨리·천천히 걸으면 천천히 발이 움직이고 멈추면 바로 선다.
+  const STRIDE_PX = 14.5; // 걸음 그림 한 장이 넘어가는 거리(8장이 한 걸음 주기)
   function animatePeople(time) {
     const Art = window.NatureArt;
     state.views.forEach((view) => {
-      const dx = view.container.x - view.lastX; const dy = view.container.y - view.lastY;
-      view.lastX = view.container.x; view.lastY = view.container.y;
-      if (Math.abs(dx) + Math.abs(dy) > 0.15) {
-        view.stepping = time;
-        if (Math.abs(dy) > Math.abs(dx) * 0.5) view.back = dy < 0; // 위로 걸으면 뒷모습
-        if (Math.abs(dx) > 0.1) view.lean = dx > 0 ? 1 : -1;
-      }
-      const active = view.stepping !== undefined && time - view.stepping < 160;
-      let key; let bob = 0; let angle = 0;
-      if (active) {
-        const cycle = 640; const t = ((time % cycle) / cycle) * Art.WALK_FRAMES; const frame = Math.floor(t) % Art.WALK_FRAMES;
+      const x = view.container.x; const y = view.container.y;
+      const dx = x - view.lastX; const dy = y - view.lastY;
+      const dt = Math.max(1, time - (view.lastT === undefined ? time - 16 : view.lastT));
+      view.lastX = x; view.lastY = y; view.lastT = time;
+      const dist = Math.hypot(dx, dy);
+      view.vx = (view.vx || 0) * 0.7 + (dx / dt) * 1000 * 0.3;
+      view.vy = (view.vy || 0) * 0.7 + (dy / dt) * 1000 * 0.3;
+      view.speed = Math.hypot(view.vx, view.vy);
+      const moving = view.speed > 14;
+      let key; let bob = 0; let target = 0;
+      if (moving) {
+        view.phaseDist = (view.phaseDist || 0) + dist;
+        if (Math.abs(view.vy) > Math.abs(view.vx) * 0.5) view.back = view.vy < 0; // 위로 걸으면 뒷모습
+        const frame = Math.floor(view.phaseDist / STRIDE_PX) % Art.WALK_FRAMES;
         key = Art.characterKey(view.color, view.back, frame);
-        const phase = (t / Art.WALK_FRAMES) * Math.PI * 2;
+        const phase = (view.phaseDist / (STRIDE_PX * Art.WALK_FRAMES)) * Math.PI * 2;
         bob = -Math.abs(Math.sin(phase)) * 3.5; // 발이 땅에 닿을 때 몸이 가장 낮아짐
-        angle = (view.lean || 0) * 3 + Math.sin(phase) * 1.6;
+        const lean = Math.max(-1, Math.min(1, view.vx / 150));
+        target = lean * 3 + Math.sin(phase) * 1.6;
       } else key = Art.characterKey(view.color, view.back, null);
       if (view.sprite.texture.key !== key) view.sprite.setTexture(key);
-      view.sprite.y = 30 + bob; view.sprite.setAngle(angle);
+      view.angle = (view.angle || 0) + (target - (view.angle || 0)) * 0.25; // 기울기도 부드럽게
+      view.sprite.y = FOOT_DY + bob; view.sprite.setAngle(view.angle);
     });
   }
   function removePeer(id) {
@@ -258,14 +315,20 @@
     if (payload.timestamp <= old) return; // 순서가 뒤바뀐 오래된 메시지는 버림(보낸 사람 자신의 시계끼리만 비교)
     state.lastReceived.set(payload.id, payload.timestamp);
     const known = state.peers.get(payload.id);
-    state.peers.set(payload.id, { ...(known || {}), id: payload.id, name: cleanName(payload.name) || `탐험가 ${String(payload.id).slice(-4)}`, color: payload.color, x: payload.x, y: payload.y, timestamp: payload.timestamp, receivedAt: Date.now() });
+    const nowMs = Date.now();
+    const shown = state.views.get(payload.id);
+    let fx = shown ? shown.container.x : payload.x; let fy = shown ? shown.container.y : payload.y;
+    if (Math.hypot(fx - payload.x, fy - payload.y) > 400) { fx = payload.x; fy = payload.y; } // 멀리 순간이동한 경우는 바로 옮긴다
+    const dur = known && known.receivedAt ? Math.min(450, Math.max(140, nowMs - known.receivedAt)) : 260;
+    state.peers.set(payload.id, { ...(known || {}), seg: { fx, fy, tx: payload.x, ty: payload.y, t0: nowMs, dur }, id: payload.id, name: cleanName(payload.name) || `탐험가 ${String(payload.id).slice(-4)}`, color: payload.color, x: payload.x, y: payload.y, timestamp: payload.timestamp, receivedAt: Date.now() });
     if (!known) { redraw(); const view = state.views.get(payload.id); if (view) view.container.setPosition(payload.x, payload.y); }
     state.hudDirty = true;
   }
   function sendLocation() {
+    if (!state.posDirty) return; // 움직인 뒤 한 번은 마지막 자리까지 꼭 보낸다(멈췄을 때 남의 화면에서 어긋나지 않게)
     const now = Date.now();
     if (now - state.lastSentAt < POSITION_INTERVAL) return;
-    state.lastSentAt = now; state.seq += 1;
+    state.lastSentAt = now; state.seq += 1; state.posDirty = false;
     if (state.mode !== 'real' || !state.channel || state.realtime !== 'live') return;
     state.channel.send({ type: 'broadcast', event: 'location', payload: currentPayload() });
   }
@@ -294,7 +357,7 @@
       .on('presence', { event: 'sync' }, applyPresence)
       .on('presence', { event: 'leave' }, ({ leftPresences }) => { (leftPresences || []).forEach((p) => { if (p && p.id) removePeer(p.id); }); state.hudDirty = true; })
       .on('broadcast', { event: 'location' }, ({ payload }) => acceptLocation(payload))
-      .on('broadcast', { event: 'sync' }, () => { state.lastSentAt = 0; sendLocation(); })
+      .on('broadcast', { event: 'sync' }, () => { state.lastSentAt = 0; state.posDirty = true; sendLocation(); })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           setRealtime('live'); setStatus('입장했어요. 방향키로 걸어 보세요.');

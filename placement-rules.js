@@ -36,15 +36,35 @@
   // 작은 섬 (물 한가운데 있는 땅)
   const ISLAND = { cx: 1605, cy: 480, rx: 115, ry: 82 };
 
-  // 설치 가능한 자연물. radius는 0002 SQL의 겹침 반경과 같아야 한다(서버가 최종 판단).
-  // displayWidth는 화면에 그리는 너비입니다. 일부러 겹침 반경보다 크게 그려 풍성해 보이게 합니다.
+  // 설치 가능한 자연물. radius는 0004 SQL의 겹침 반경과 같아야 한다(서버가 최종 판단).
+  // displayWidth: 화면에 그리는 너비(겹침 반경보다 크게 그려 풍성해 보이게 함)
+  // collide: 캐릭터가 지나가지 못하는 몸통 반경(0이면 지나갈 수 있음) / lift: 땅에서 위로 띄워 그리는 높이
+  // onTree: 나무에만 달 수 있음 / inWater: 물 위에만 놓을 수 있음 / ground: 바닥에 깔리는 그림(사람 뒤에 그림)
   const KINDS = {
-    rock: { label: '돌', radius: 34, texture: 'mossyRocks', displayWidth: 92, hint: '이끼 낀 돌이에요.' },
-    wildflower: { label: '야생화', radius: 26, texture: 'wildflowerPatch', displayWidth: 104, hint: '작은 꽃이 피는 풀밭이에요.' },
-    shrub: { label: '관목', radius: 70, texture: 'shrubFlower', displayWidth: 150, hint: '꽃이 핀 둥근 덤불이에요.' },
-    fallen_branch: { label: '쓰러진 나뭇가지', radius: 42, texture: 'fallenBranch', displayWidth: 112, hint: '땅에 떨어진 기다란 나뭇가지예요.' }
+    rock: { label: '돌', radius: 34, texture: 'mossyRocks', displayWidth: 92, collide: 24 },
+    wildflower: { label: '꽃', radius: 26, texture: 'wildflowerPatch', displayWidth: 104, collide: 0 },
+    shrub: { label: '작은 나무', radius: 70, texture: 'shrubFlower', displayWidth: 150, collide: 42 },
+    squirrel: { label: '다람쥐', radius: 24, texture: 'obj_squirrel', displayWidth: 78, collide: 12 },
+    rabbit: { label: '토끼', radius: 26, texture: 'obj_rabbit', displayWidth: 84, collide: 13 },
+    butterfly: { label: '나비', radius: 18, texture: 'obj_butterfly_a', displayWidth: 60, collide: 0, lift: 38 },
+    pond: { label: '작은 연못', radius: 76, texture: 'obj_pond', displayWidth: 200, collide: 0, originY: 0.5, ground: true },
+    reed: { label: '갈대', radius: 30, texture: 'obj_reed', displayWidth: 96, collide: 13 },
+    vine: { label: '덩굴', radius: 34, texture: 'obj_vine', displayWidth: 100, collide: 15 },
+    beehive: { label: '벌집', radius: 22, texture: 'obj_hive', displayWidth: 58, collide: 0, lift: 58, onTree: true },
+    fish: { label: '물고기', radius: 16, texture: 'obj_fish', displayWidth: 62, collide: 0, inWater: true, ground: true, originY: 0.5 },
+    waterlily: { label: '수련', radius: 24, texture: 'obj_lily', displayWidth: 84, collide: 0, inWater: true, ground: true, originY: 0.5 },
+    // 예전에 놓은 것이 남아 있을 수 있어서 그림과 규칙만 남겨 둔다(고르는 버튼에는 없음)
+    fallen_branch: { label: '나뭇가지', radius: 42, texture: 'fallenBranch', displayWidth: 112, collide: 20 }
   };
-  const KIND_ORDER = ['rock', 'wildflower', 'shrub', 'fallen_branch'];
+  const KIND_ORDER = ['rock', 'wildflower', 'shrub', 'squirrel', 'rabbit', 'butterfly', 'pond', 'reed', 'vine', 'beehive', 'fish', 'waterlily'];
+  // 작은 연못의 물 부분(그림 가운데 타원, 월드 좌표 반경)
+  const POND_WATER = { rx: 66, ry: 42 };
+  // 벌집을 달 수 있는 나무(art.js의 나무 위치와 같다). 벌집 좌표는 나무 뿌리 자리로 저장한다.
+  const TREES = [
+    { x: 225, y: 205 }, { x: 1050, y: 260 }, { x: 1080, y: 672 }, { x: 1450, y: 990 }, { x: 2180, y: 1120 }, { x: 2140, y: 640 }
+  ];
+  // 물 위에 그려진 갈대·연잎(물고기·수련을 그 위에 놓지 못하게)
+  const WATER_DECOR = [{ x: 1400, y: 330, r: 46 }, { x: 1790, y: 610, r: 50 }, { x: 1650, y: 445, r: 40 }];
 
   // 이미 그려져 있는 나무·덤불·돌 (그 위에 겹쳐 놓지 못하게 막는다)
   const STATIC_BLOCKERS = [
@@ -125,13 +145,53 @@
     return null;
   }
 
+  // ---------- 물 위에 놓는 것(물고기·수련)과 작은 연못 ----------
+  function pondWater(p) { const k = p.scale || 1; return { rx: POND_WATER.rx * k, ry: POND_WATER.ry * k }; }
+  // 점이 (놓인) 작은 연못의 물 안에 있는지. shrink만큼 안쪽으로 들어와야 한다.
+  function inUserPond(x, y, objects, shrink = 0) {
+    for (const o of objects || []) {
+      if (o.kind !== 'pond' || o.deleted_at) continue;
+      const w = pondWater(o);
+      const rx = w.rx - shrink; const ry = w.ry - shrink * 0.7;
+      if (rx > 0 && ry > 0 && ((x - o.x) / rx) ** 2 + ((y - o.y) / ry) ** 2 <= 1) return true;
+    }
+    return false;
+  }
+  function waterBlock(kind, x, y, objects) {
+    const info = KINDS[kind];
+    const r = info.radius;
+    if (x < 40 || x > WORLD_WIDTH - 40 || y < 70 || y > WORLD_HEIGHT - 40) return 'bounds';
+    const point = { x, y };
+    const nearIsland = ((x - ISLAND.cx) / (ISLAND.rx + r)) ** 2 + ((y - ISLAND.cy) / (ISLAND.ry + r)) ** 2 < 1;
+    const natural = !nearIsland && (WATER_AREAS.some((a) => inArea(point, inflate(a, -r * 0.8))) || SHALLOWS.some((a) => inArea(point, inflate(a, -r * 0.6))));
+    if (!natural && !inUserPond(x, y, objects, r * 0.6)) return 'notwater';
+    if (WATER_DECOR.some((d) => Math.hypot(d.x - x, d.y - y) < r + d.r)) return 'decor';
+    return null;
+  }
+  // 벌집: 가장 가까운 나무를 찾는다(잎 쪽을 눌러도 되도록 나무 위쪽까지 넓게 본다).
+  function nearestTree(x, y) {
+    let best = null; let bestD = Infinity;
+    TREES.forEach((t) => {
+      const dx = x - t.x; const dy = y - t.y;
+      if (Math.abs(dx) > 105 || dy < -250 || dy > 70) return;
+      const d = Math.hypot(dx, dy + 80);
+      if (d < bestD) { bestD = d; best = t; }
+    });
+    return best;
+  }
+  // 물 위의 것(물고기·수련)과 그 아래 연못은 겹쳐도 된다(서버 SQL도 같은 예외).
+  function overlapExempt(a, b) {
+    const onWater = (k) => k === 'fish' || k === 'waterlily';
+    return (a === 'pond' && onWater(b)) || (b === 'pond' && onWater(a));
+  }
+
   // ---------- 자연물끼리 겹침 (서버 규칙과 같은 식) ----------
   function overlapsOthers(kind, x, y, objects, ignoreId) {
     const r = KINDS[kind].radius;
     for (const o of objects) {
       if (o.id === ignoreId || o.deleted_at) continue;
       const other = KINDS[o.kind];
-      if (!other) continue;
+      if (!other || overlapExempt(kind, o.kind)) continue;
       if (Math.hypot(o.x - x, o.y - y) < r + other.radius * (o.scale || 1)) return true;
     }
     return false;
@@ -151,19 +211,35 @@
     water: '물 위에는 놓을 수 없어요. 풀밭을 골라 주세요.',
     path: '길 위에는 놓을 수 없어요. 길 옆 풀밭을 골라 주세요.',
     decor: '나무나 덤불 가까이에는 놓을 수 없어요. 조금 떨어진 곳을 골라 주세요.',
-    overlap: '다른 자연물과 너무 가까워요. 조금 떨어진 곳을 골라 주세요.'
+    overlap: '다른 자연물과 너무 가까워요. 조금 떨어진 곳을 골라 주세요.',
+    notwater: '물 위에만 놓을 수 있어요. 연못 안을 골라 주세요.',
+    tree: '벌집은 나무에만 달 수 있어요. 나무 가까이를 골라 주세요.',
+    hive: '이 나무에는 벌집이 이미 있어요. 다른 나무를 골라 주세요.',
+    waterdecor: '갈대나 연잎 위에는 놓을 수 없어요. 조금 옆을 골라 주세요.'
   };
 
-  // 후보 위치 검사: { ok, reason, message }
+  // 후보 위치 검사: { ok, reason, message, x, y } (x, y는 규칙에 따라 바뀐 자리. 벌집은 나무 뿌리 자리로 옮겨진다)
   function validate(kind, x, y, objects, ignoreId) {
-    if (!KINDS[kind]) return { ok: false, reason: 'kind', message: '고를 수 없는 자연물이에요.' };
-    const block = groundBlock(kind, x, y);
-    if (block) return { ok: false, reason: block, message: BLOCK_MESSAGES[block] };
-    if (overlapsOthers(kind, x, y, objects, ignoreId)) return { ok: false, reason: 'overlap', message: BLOCK_MESSAGES.overlap };
-    return { ok: true, reason: null, message: '여기에 놓을 수 있어요.' };
+    const info = KINDS[kind];
+    if (!info) return { ok: false, reason: 'kind', message: '고를 수 없는 자연물이에요.', x, y };
+    let px = x; let py = y;
+    let block = null;
+    if (info.onTree) {
+      const tree = nearestTree(x, y);
+      if (!tree) return { ok: false, reason: 'tree', message: BLOCK_MESSAGES.tree, x, y };
+      px = tree.x; py = tree.y;
+    } else if (info.inWater) {
+      block = waterBlock(kind, x, y, objects);
+      if (block === 'decor') block = 'waterdecor';
+    } else block = groundBlock(kind, x, y);
+    if (block) return { ok: false, reason: block, message: BLOCK_MESSAGES[block], x: px, y: py };
+    if (overlapsOthers(kind, px, py, objects, ignoreId)) {
+      return { ok: false, reason: 'overlap', message: info.onTree ? BLOCK_MESSAGES.hive : BLOCK_MESSAGES.overlap, x: px, y: py };
+    }
+    return { ok: true, reason: null, message: '여기에 놓을 수 있어요.', x: px, y: py };
   }
 
-  // 서버(0002 SQL) 오류 문구 → 학생에게 보여 줄 말
+  // 서버(0002·0004 SQL) 오류 문구 → 학생에게 보여 줄 말
   const SERVER_ERRORS = {
     'nature object overlaps another object': BLOCK_MESSAGES.overlap,
     'world nature object limit reached': '월드에 자연물이 가득 찼어요. 선생님께 알려 주세요.',
@@ -201,6 +277,6 @@
     WORLD_WIDTH, WORLD_HEIGHT, PER_USER_LIMIT, WORLD_LIMIT, WRITE_INTERVAL_MS,
     ZONES, WATER_AREAS, SHALLOWS, ISLAND, KINDS, KIND_ORDER, STATIC_BLOCKERS, FIELD_PATH, CODE_ALPHABET, CODE_LENGTH,
     inArea, zoneAt, isWater, groundBlock, overlapsOthers, validate, eul, iyeyo, serverErrorMessage, normalizeCode,
-    pathPolygon
+    pathPolygon, TREES, POND_WATER, WATER_DECOR, inUserPond, waterBlock, nearestTree, overlapExempt
   };
 });

@@ -272,7 +272,7 @@ async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.Nat
     const okA = await waitWorld(A);
     if (!okA) console.log('DEBUG', await A.page.evaluate(() => ({msg: document.getElementById('join-message').innerText, joinHidden: document.getElementById('join-card').hidden, worldHidden: document.getElementById('world-section').hidden, panelHidden: document.getElementById('nature-panel').hidden, scene: !!(window.NatureGame&&window.NatureGame.scene), status: document.getElementById('location-status').innerText})), A.errors);
     check(okA, '맞는 코드로 월드에 들어가고 설치 패널이 보인다');
-    check(await A.page.locator('canvas').count() === 1, '게임 캔버스가 만들어진다');
+    check(await A.page.locator('#game canvas').count() === 1, '게임 캔버스가 만들어진다');
     check(fake.signIns === 1, '익명 로그인은 한 번만 했다', fake.signIns);
     await A.page.screenshot({ path: path.join(SHOTS, 'e2e-01-entered.png') });
 
@@ -400,26 +400,108 @@ async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.Nat
     check(await until(async () => (await text(Dd.page, '#realtime-note')).includes('자연물은 함께 볼 수 있어요')), '친구 움직임이 안 보인다는 점과 자연물은 보인다는 점을 알려 준다');
     check(await until(async () => (await Dd.page.evaluate(() => window.NaturePlacement.debug.objects.size)) >= 12, 7000), '그래도 자연물은 새로 읽기로 보인다');
 
-    // ===== 11. 네 가지 모두 놓은 장면 =====
-    console.log('11. 그림 확인');
+    // ===== 11. 열두 가지 모두 놓은 장면 =====
+    console.log('11. 열두 가지 자연물과 그림 버튼');
     for (const c of [B, C, Dd]) await c.context.close(); // 소프트웨어 렌더링이라 탭이 많으면 느려지므로 정리
     const E = await newClient(browser, fake, port, 'E');
     await enterWithCode(E, CODE); const okE = await waitWorld(E);
     if (!okE) console.log('EDBG', await E.page.evaluate(() => ({msg: document.getElementById('join-message').innerText, url: location.href, hasPanel: !!document.getElementById('np-cooldown'), body: document.body.innerText.slice(0,200)})), E.errors);
-    const spots = [['rock', 560, 560], ['wildflower', 700, 640], ['shrub', 820, 520], ['fallen_branch', 600, 440]];
+    check(await E.page.locator('#np-kinds .np-kind').count() === 12, '자연물 버튼이 12개다');
+    check((await E.page.evaluate(() => [...document.querySelectorAll('#np-kinds .np-kind')].every((b) => b.innerText.trim() === '' && b.querySelector('canvas') && b.getAttribute('aria-label')))), '버튼에는 글자 없이 그림(canvas)만 있고, 이름은 aria-label에만 있다');
+    check((await E.page.evaluate(() => [...document.querySelectorAll('#np-kinds .np-kind')].map((b) => b.getAttribute('aria-label')).join(','))) === '돌,꽃,작은 나무,다람쥐,토끼,나비,작은 연못,갈대,덩굴,벌집,물고기,수련', '이름은 쉬운 말이다(관목 → 작은 나무)');
+    check((await E.page.evaluate(() => [...document.querySelectorAll('#np-kinds .np-kind canvas')].every((c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 40) if (d[i] > 30) n += 1; return n > 80; }))), '모든 버튼 그림이 비어 있지 않다');
+    // 규칙 안내: 벌집은 나무에만, 물고기는 물에만
+    await waitCooldown(E);
+    await E.page.click('.np-kind[data-kind="beehive"]'); await pointAt(E, 640, 520);
+    check((await status(E.page)).includes('나무에만'), '벌집을 풀밭에 놓으려 하면 "나무에만" 안내', await status(E.page));
+    check(await E.page.locator('#np-confirm').isDisabled(), '그 자리에서는 놓기 버튼이 꺼진다');
+    await E.page.keyboard.press('Escape');
+    await E.page.click('.np-kind[data-kind="fish"]'); await pointAt(E, 640, 520);
+    check((await status(E.page)).includes('물 위에만'), '물고기를 풀밭에 놓으려 하면 "물 위에만" 안내', await status(E.page));
+    await E.page.keyboard.press('Escape');
+    await E.page.click('.np-kind[data-kind="waterlily"]'); await pointAt(E, 640, 520);
+    check((await status(E.page)).includes('물 위에만'), '수련도 풀밭에는 놓을 수 없다');
+    await E.page.keyboard.press('Escape');
+    const spots = [['rock', 560, 560], ['wildflower', 700, 640], ['shrub', 820, 520], ['squirrel', 460, 640], ['rabbit', 440, 520], ['butterfly', 700, 480],
+      ['pond', 1020, 430], ['reed', 560, 380], ['vine', 480, 420], ['beehive', 1080, 600], ['fish', 1500, 300], ['waterlily', 1560, 260]];
     for (const [kind, x, y] of spots) {
       await waitCooldown(E);
       await E.page.click(`.np-kind[data-kind="${kind}"]`);
       await pointAt(E, x, y);
       await E.page.keyboard.press('Enter');
-      await until(async () => (await E.page.evaluate((k) => [...window.NaturePlacement.debug.objects.values()].some((o) => o.kind === k && o.owner_id === window.NatureGame.getMe().id), kind)), 4000);
+      const placed = await until(async () => (await E.page.evaluate((k) => [...window.NaturePlacement.debug.objects.values()].some((o) => o.kind === k && o.owner_id === window.NatureGame.getMe().id), kind)), 4000);
+      if (!placed) console.log('PLACEDBG', kind, await status(E.page));
+      check(placed, `${kind} 놓기`);
     }
-    check((await E.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].filter((o) => o.owner_id === window.NatureGame.getMe().id).length)) === 4, '네 종류를 모두 놓았다');
-    // 카메라를 그 장면으로 옮겨서 캡처 (캐릭터를 해당 위치 근처로)
-    await E.page.evaluate(() => { const m = window.NatureGame.getMe(); m.x = 700; m.y = 560; window.NatureGame.scene.anchor.setPosition(700, 560); });
-    await sleep(900);
-    await E.page.screenshot({ path: path.join(SHOTS, 'e2e-02-four-kinds.png') });
+    check((await E.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].filter((o) => o.owner_id === window.NatureGame.getMe().id).length)) === 12, '열두 종류를 모두 놓았다');
+    const hive = await E.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].find((o) => o.kind === 'beehive'));
+    check(hive && hive.x === 1080 && hive.y === 672, '벌집은 눌러 준 자리가 아니라 나무 뿌리 자리(저장 좌표)에 붙는다', hive);
+    // 두 번째 벌집은 같은 나무에 달 수 없다
+    await waitCooldown(E);
+    await E.page.click('.np-kind[data-kind="rock"]'); await E.page.keyboard.press('Escape');
+    // (내 12개를 다 썼으므로 상한 문구가 먼저 나온다. 같은 나무 규칙은 단위 시험에서 확인)
+    // 카메라를 그 장면으로 옮겨서 캡처
+    await E.page.evaluate(() => { const m = window.NatureGame.getMe(); m.x = 640; m.y = 470; window.NatureGame.scene.anchor.setPosition(640, 470); });
+    await sleep(1200);
+    await E.page.screenshot({ path: path.join(SHOTS, 'e2e-02-all-kinds.png') });
+    await E.page.evaluate(() => { const m = window.NatureGame.getMe(); m.x = 1330; m.y = 330; window.NatureGame.scene.anchor.setPosition(1330, 330); });
+    await sleep(1200);
+    await E.page.screenshot({ path: path.join(SHOTS, 'e2e-02b-pond-things.png') });
     await A.page.screenshot({ path: path.join(SHOTS, 'e2e-03-A-panel.png') });
+
+    // ===== 11b. 걷기: 서서히 빨라지고, 자연물과 나무를 뚫지 못한다 =====
+    console.log('11b. 걷기와 막힘');
+    const walk = async (page, key, ms) => { await page.keyboard.down(key); await sleep(ms); await page.keyboard.up(key); };
+    await E.page.evaluate(() => { const m = window.NatureGame.getMe(); m.x = 540; m.y = 470; window.NatureGame.scene.anchor.setPosition(540, 470); window.NatureGame.scene.vel = { x: 0, y: 0 }; });
+    // 시계에 흔들리지 않도록 게임 루프를 멈추고, 1/60초씩 직접 걸음을 계산해서 속도 변화를 본다.
+    const prof = await E.page.evaluate(() => {
+      const sc = window.NatureGame.scene; sc.sys.game.loop.sleep();
+      sc.vel = { x: 0, y: 0 }; const out = {};
+      sc.cursors.right.isDown = true;
+      for (let i = 1; i <= 60; i += 1) { sc.stepPlayer(1 / 60); if (i === 3) out.early = sc.vel.x; if (i === 45) out.cruise = sc.vel.x; }
+      sc.cursors.right.isDown = false;
+      sc.stepPlayer(1 / 60); sc.stepPlayer(1 / 60); out.mid = sc.vel.x;
+      for (let i = 0; i < 40; i += 1) sc.stepPlayer(1 / 60);
+      out.stopped = sc.vel.x; sc.sys.game.loop.wake(); return out;
+    });
+    const { early, cruise, mid, stopped } = prof;
+    check(early < cruise * 0.6, '출발할 때 속도가 서서히 붙는다', { early, cruise });
+    check(cruise > 150 && cruise <= 186, '조금 지나면 걷는 속도(약 185)에 이른다', cruise);
+    check(mid > 0 && mid < cruise * 0.8, '멈출 때 속도가 서서히 줄어든다', { mid, cruise });
+    check(stopped === 0, '곧 완전히 선다', stopped);
+    await E.page.locator('#game').focus();
+    // 내가 놓은 돌(700,560 근처 말고 실제 좌표)로 걸어가기: 돌 몸통 반경 24 + 발 13 이내로는 못 들어간다
+    const rockRow = await E.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].find((o) => o.kind === 'rock'));
+    await E.page.evaluate((r) => { const m = window.NatureGame.getMe(); m.x = r.x - 150; m.y = r.y - 30; window.NatureGame.scene.anchor.setPosition(m.x, m.y); window.NatureGame.scene.vel = { x: 0, y: 0 }; }, rockRow);
+    await walk(E.page, 'ArrowRight', 1500);
+    const nearRock = await E.page.evaluate(() => window.NatureGame.getMe());
+    check(nearRock.x <= rockRow.x - 24 - 13 + 1, '돌을 뚫고 지나가지 못한다', { me: nearRock.x, rock: rockRow.x });
+    check(nearRock.x > rockRow.x - 24 - 13 - 12, '돌 바로 앞까지는 간다', { me: nearRock.x, rock: rockRow.x });
+    // 비스듬히 부딪히면 옆으로 미끄러진다
+    await E.page.evaluate((r) => { const m = window.NatureGame.getMe(); m.x = r.x - 90; m.y = r.y - 30 - 40; window.NatureGame.scene.anchor.setPosition(m.x, m.y); window.NatureGame.scene.vel = { x: 0, y: 0 }; }, rockRow);
+    await E.page.keyboard.down('ArrowRight'); await E.page.keyboard.down('ArrowDown'); await sleep(1800); await E.page.keyboard.up('ArrowRight'); await E.page.keyboard.up('ArrowDown');
+    const slid = await E.page.evaluate(() => window.NatureGame.getMe());
+    check(slid.x > rockRow.x + 20, '비스듬히 부딪히면 돌 옆으로 미끄러져 지나간다', { slid, rock: rockRow });
+    const dist = Math.hypot(slid.x - rockRow.x, slid.y + 30 - rockRow.y);
+    check(dist >= 24 + 13 - 1, '지나가면서도 돌 안으로 들어가지 않는다', dist);
+    // 꽃은 지나갈 수 있다
+    const flowerRow = await E.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].find((o) => o.kind === 'wildflower'));
+    await E.page.evaluate((r) => { const m = window.NatureGame.getMe(); m.x = r.x - 100; m.y = r.y - 30; window.NatureGame.scene.anchor.setPosition(m.x, m.y); window.NatureGame.scene.vel = { x: 0, y: 0 }; }, flowerRow);
+    await walk(E.page, 'ArrowRight', 1200);
+    check((await E.page.evaluate(() => window.NatureGame.getMe().x)) > flowerRow.x + 20, '꽃밭은 지나갈 수 있다');
+    // 이미 있던 나무 줄기(225,205)
+    await E.page.evaluate(() => { const m = window.NatureGame.getMe(); m.x = 120; m.y = 175; window.NatureGame.scene.anchor.setPosition(m.x, m.y); window.NatureGame.scene.vel = { x: 0, y: 0 }; });
+    await walk(E.page, 'ArrowRight', 1500);
+    check((await E.page.evaluate(() => window.NatureGame.getMe().x)) <= 225 - 22 - 13 + 1, '원래 있던 나무도 뚫고 지나가지 못한다');
+    // 친구가 놓은 돌도 막는다(다른 사람 것 포함)
+    const fr = fake.inject({ kind: 'rock', x: 1000, y: 1000 });
+    await until(async () => await E.page.evaluate((id) => window.NaturePlacement.debug.objects.has(id), fr.id), 7000);
+    await E.page.evaluate(() => { const m = window.NatureGame.getMe(); m.x = 850; m.y = 970; window.NatureGame.scene.anchor.setPosition(m.x, m.y); window.NatureGame.scene.vel = { x: 0, y: 0 }; });
+    await walk(E.page, 'ArrowRight', 1500);
+    check((await E.page.evaluate(() => window.NatureGame.getMe().x)) <= 1000 - 24 - 13 + 1, '친구가 놓은 자연물도 뚫고 지나가지 못한다');
+    // 작은 연못은 걸어 들어갈 수 있고 느려진다
+    const pondRow = await E.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].find((o) => o.kind === 'pond'));
+    check(await E.page.evaluate(([x, y]) => window.NaturePlacement.inPond(x, y), [pondRow.x, pondRow.y]), '작은 연못 안은 물로 판정된다(걸으면 느려진다)');
 
     // ===== 12. 콘솔 오류 =====
     console.log('12. 브라우저 콘솔 오류');

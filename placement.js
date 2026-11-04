@@ -37,6 +37,10 @@
   const mineList = () => [...objects.values()].filter((o) => o.owner_id === ctx.meId);
   const isMine = (o) => o && ctx && o.owner_id === ctx.meId;
   const label = (kind) => (R.KINDS[kind] ? R.KINDS[kind].label : '자연물');
+  const originY = (info) => (info.originY === undefined ? 0.86 : info.originY);
+  const liftOf = (info) => info.lift || 0;
+  const depthOf = (info, o) => (info.ground ? (info.originY === 0.5 && info !== R.KINDS.pond ? 10 + o.y / 10000 : 9) : 1000 + o.y);
+  const iconBoxCache = new Map();
 
   function say(text, type = '') { E.status.textContent = text; E.status.dataset.type = type; }
 
@@ -70,7 +74,7 @@
     window.removeEventListener('keydown', onKeydown, true);
     G.worldPointerHandler = null; G.inputLocked = false;
     clearInterval(cooldownTimer); clearTimeout(deleteArmedTimer);
-    views.forEach((v) => { v.image.destroy(); if (v.mark) v.mark.destroy(); });
+    views.forEach((v) => { v.image.destroy(); if (v.mark) v.mark.destroy(); (v.extras || []).forEach((e) => e.destroy()); });
     views.clear(); objects.clear();
     if (ghost) ghost.destroy(); if (ringGfx) ringGfx.destroy(); if (selGfx) selGfx.destroy();
     ghost = ringGfx = selGfx = null; placing = null; selectedId = null; busy = false; cooldownUntil = 0;
@@ -78,15 +82,37 @@
     ctx = null;
   }
 
-  // ---------- 자연물 고르기 버튼 ----------
+  // ---------- 자연물 고르기 버튼: 글자 없이 그림만 (이름은 소리 읽기용 aria-label에만) ----------
+  // 텍스처에서 그림이 있는 부분만 잘라 정사각형 칸에 맞춰 그린다.
+  function iconCanvas(kind, size) {
+    const info = R.KINDS[kind];
+    const tex = G.scene.textures.get(info.texture);
+    const src = tex && tex.getSourceImage();
+    const c = document.createElement('canvas');
+    c.width = size * 2; c.height = size * 2; c.style.width = `${size}px`; c.style.height = `${size}px`; c.setAttribute('aria-hidden', 'true');
+    if (!src) return c;
+    let box = iconBoxCache.get(info.texture);
+    if (!box) {
+      const probe = document.createElement('canvas'); probe.width = src.width; probe.height = src.height;
+      const pg = probe.getContext('2d'); pg.drawImage(src, 0, 0);
+      const data = pg.getImageData(0, 0, probe.width, probe.height).data;
+      let x0 = probe.width; let y0 = probe.height; let x1 = 0; let y1 = 0;
+      for (let y = 0; y < probe.height; y += 1) for (let x = 0; x < probe.width; x += 1) if (data[(y * probe.width + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      box = x1 > x0 ? { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 } : { x: 0, y: 0, w: probe.width, h: probe.height };
+      iconBoxCache.set(info.texture, box);
+    }
+    const pad = size * 0.16; const k = Math.min((c.width - pad) / box.w, (c.height - pad) / box.h);
+    c.getContext('2d').drawImage(src, box.x, box.y, box.w, box.h, (c.width - box.w * k) / 2, (c.height - box.h * k) / 2, box.w * k, box.h * k);
+    return c;
+  }
   function buildKindButtons() {
     E.kinds.replaceChildren(...R.KIND_ORDER.map((kind) => {
       const info = R.KINDS[kind];
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'np-kind'; button.dataset.kind = kind; button.setAttribute('aria-pressed', 'false');
-      const strong = document.createElement('strong'); strong.textContent = info.label;
-      const small = document.createElement('small'); small.textContent = info.hint;
-      button.append(strong, small);
+      button.setAttribute('aria-label', info.label); button.title = info.label;
+      if (info.inWater) button.dataset.need = 'water'; else if (info.onTree) button.dataset.need = 'tree';
+      button.append(iconCanvas(kind, 46));
       button.addEventListener('click', () => beginPlacement('create', { kind }));
       return button;
     }));
@@ -101,23 +127,41 @@
     const scene = G.scene;
     if (!v) {
       if (!scene.textures.exists(info.texture)) return null;
-      const image = scene.add.image(o.x, o.y, info.texture).setOrigin(0.5, 0.86);
-      image.setInteractive({ useHandCursor: true });
-      image.on('pointerdown', () => { if (!placing) select(o.id); });
-      v = { image, mark: null };
+      const image = scene.add.image(o.x, o.y, info.texture).setOrigin(0.5, originY(info));
+      if (o.kind !== 'pond') { // 연못은 눌러도 선택되지 않게 한다(물 위를 눌러 걸어 들어갈 수 있도록). 목록에서 고른다.
+        image.setInteractive({ useHandCursor: true });
+        image.on('pointerdown', () => { if (!placing) select(o.id); });
+      }
+      v = { image, mark: null, extras: [], phase: (o.x * 0.013 + o.y * 0.007) % 6.28, baseScale: 1 };
+      if (o.kind === 'beehive') for (let i = 0; i < 3; i += 1) v.extras.push(scene.add.image(o.x, o.y, 'obj_bee').setDisplaySize(15, 11.5));
       views.set(o.id, v);
     }
-    v.image.setScale((info.displayWidth / v.image.width) * (o.scale || 1)).setPosition(o.x, o.y).setDepth(1000 + o.y);
+    v.baseScale = (info.displayWidth / v.image.width) * (o.scale || 1);
+    v.image.setScale(v.baseScale).setPosition(o.x, o.y - liftOf(info)).setDepth(depthOf(info, o));
     // 내 것에는 발밑에 흰 고리를 그려 친구 것과 구분한다
-    if (isMine(o)) {
+    if (isMine(o) && !info.ground) {
       if (!v.mark) v.mark = scene.add.ellipse(0, 0, 10, 10).setStrokeStyle(3, 0xffffff, 0.95);
-      const w = Math.max(40, info.displayWidth * 0.62);
+      const w = Math.max(40, Math.min(info.displayWidth, info.radius * 2) * 0.62);
       v.mark.setPosition(o.x, o.y + 3).setSize(w, w * 0.26).setDisplaySize(w, w * 0.26).setDepth(1000 + o.y - 0.2);
+    } else if (isMine(o) && info.ground) {
+      if (!v.mark) v.mark = scene.add.ellipse(0, 0, 10, 10).setStrokeStyle(3, 0xffffff, 0.95);
+      const w = Math.min(info.displayWidth, info.radius * 2) * 0.62;
+      v.mark.setPosition(o.x, o.y).setDisplaySize(w, w * 0.4).setDepth(depthOf(info, o) + 0.01);
     } else if (v.mark) { v.mark.destroy(); v.mark = null; }
     v.image.setAlpha(placing && placing.type === 'move' && placing.id === o.id ? 0.3 : 1);
     return v;
   }
-  function dropView(id) { const v = views.get(id); if (v) { v.image.destroy(); if (v.mark) v.mark.destroy(); views.delete(id); } }
+  // 물고기·수련은 놓아 둔 연못이 사라지면 물이 없으니 숨긴다
+  function refreshStranded() {
+    const list = [...objects.values()];
+    views.forEach((v, id) => {
+      const o = objects.get(id); const info = o && R.KINDS[o.kind];
+      if (!info || !info.inWater) return;
+      const stranded = R.waterBlock(o.kind, o.x, o.y, list) === 'notwater';
+      v.image.setVisible(!stranded); if (v.mark) v.mark.setVisible(!stranded);
+    });
+  }
+  function dropView(id) { const v = views.get(id); if (v) { v.image.destroy(); if (v.mark) v.mark.destroy(); (v.extras || []).forEach((e) => e.destroy()); views.delete(id); } }
 
   function upsertObject(row) {
     if (!row) return;
@@ -153,7 +197,7 @@
     syncNote = status === 'live' ? '실시간으로 맞추는 중' : (status === 'mock' ? '시험 모드' : '5초마다 새로 읽는 중');
     renderWorldState();
   }
-  function afterObjectsChanged() { renderLists(); renderWorldState(); if (placing) refreshCandidate(false); }
+  function afterObjectsChanged() { renderLists(); renderWorldState(); refreshStranded(); if (placing) refreshCandidate(false); }
   function renderWorldState() { if (E && E.worldState) E.worldState.textContent = `자연물 ${objects.size}개${syncNote ? ` · ${syncNote}` : ''}`; }
 
   // ---------- 목록 ----------
@@ -165,7 +209,8 @@
       const li = document.createElement('li');
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'np-item'; b.dataset.id = o.id;
-      b.textContent = `${label(o.kind)} · ${R.zoneAt(o).name}`;
+      b.setAttribute('aria-label', `${label(o.kind)} · ${R.zoneAt(o).name}`); b.title = label(o.kind);
+      b.append(iconCanvas(o.kind, 34));
       b.setAttribute('aria-pressed', String(o.id === selectedId));
       b.addEventListener('click', () => select(o.id));
       li.append(b);
@@ -197,7 +242,8 @@
     if (shownId !== selectedId) resetDeleteButton();
     shownId = selectedId;
     const info = R.KINDS[o.kind];
-    selGfx.clear().lineStyle(5, 0xf2a900, 0.95).strokeEllipse(o.x, o.y + 2, info.displayWidth * 0.8, info.displayWidth * 0.28);
+    const rw = Math.min(info.displayWidth * 0.8, info.radius * 1.9);
+    selGfx.clear().lineStyle(5, 0xf2a900, 0.95).strokeEllipse(o.x, o.y + (info.ground ? 0 : 2), rw, rw * (info.ground ? 0.6 : 0.3));
   }
   function deselect(message) {
     selectedId = null; shownId = null;
@@ -216,13 +262,13 @@
     deselect();
     if (placing && placing.type === 'move') { const o = objects.get(placing.id); if (o) objectView(o); }
     placing = type === 'move'
-      ? { type, kind: source.kind, id: source.id, x: source.x, y: source.y }
-      : { type, kind: source.kind, x: clamp(snap(me.x), 0, 2390), y: clamp(snap(me.y), 0, 1490) };
+      ? { type, kind: source.kind, id: source.id, x: source.x, y: source.y, cx: source.x, cy: source.y }
+      : { type, kind: source.kind, x: clamp(snap(me.x), 0, 2390), y: clamp(snap(me.y), 0, 1490), cx: clamp(snap(me.x), 0, 2390), cy: clamp(snap(me.y), 0, 1490) };
     G.inputLocked = true;
     markPressed(placing.kind);
     if (ghost) ghost.destroy();
     const info = R.KINDS[placing.kind];
-    ghost = G.scene.add.image(placing.x, placing.y, info.texture).setOrigin(0.5, 0.86).setAlpha(0.72).setDepth(2500);
+    ghost = G.scene.add.image(placing.x, placing.y - liftOf(info), info.texture).setOrigin(0.5, originY(info)).setAlpha(0.72).setDepth(2500);
     ghost.setScale(info.displayWidth / ghost.width);
     E.confirm.hidden = false; E.cancel.hidden = false;
     E.confirm.textContent = type === 'move' ? '여기로 옮기기' : '여기에 놓기';
@@ -244,8 +290,9 @@
   function refreshCandidate(announce, first) {
     if (!placing || !ctx) return;
     const info = R.KINDS[placing.kind];
-    const check = R.validate(placing.kind, placing.x, placing.y, [...objects.values()], placing.id);
-    ghost.setPosition(placing.x, placing.y).setDepth(2500);
+    const check = R.validate(placing.kind, placing.cx, placing.cy, [...objects.values()], placing.id);
+    placing.x = check.x; placing.y = check.y; // 벌집처럼 규칙에 따라 자리가 바뀌는 경우(나무 뿌리 자리)
+    ghost.setPosition(placing.x, placing.y - liftOf(info)).setDepth(2500);
     ringGfx.clear()
       .fillStyle(check.ok ? 0x2f9e5b : 0xd1344a, 0.18).fillCircle(placing.x, placing.y, info.radius)
       .lineStyle(4, check.ok ? 0x176b43 : 0xba2636, 0.95).strokeCircle(placing.x, placing.y, info.radius);
@@ -260,7 +307,7 @@
 
   function onWorldPointer(point) {
     if (!placing) return false;
-    placing.x = clamp(snap(point.x), 0, 2390); placing.y = clamp(snap(point.y), 0, 1490);
+    placing.cx = clamp(snap(point.x), 0, 2390); placing.cy = clamp(snap(point.y), 0, 1490);
     refreshCandidate(true);
     return true;
   }
@@ -274,7 +321,7 @@
     const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[event.key];
     if (move) {
       event.preventDefault(); event.stopPropagation();
-      placing.x = clamp(placing.x + move[0], 0, 2390); placing.y = clamp(placing.y + move[1], 0, 1490);
+      placing.cx = clamp(placing.cx + move[0], 0, 2390); placing.cy = clamp(placing.cy + move[1], 0, 1490);
       refreshCandidate(true);
     } else if (event.key === 'Escape') {
       event.preventDefault(); endPlacement('취소했어요.');
@@ -299,10 +346,11 @@
 
   async function confirmPlacement() {
     if (!placing || busy || !ctx) return;
-    const check = R.validate(placing.kind, placing.x, placing.y, [...objects.values()], placing.id);
+    const check = R.validate(placing.kind, placing.cx, placing.cy, [...objects.values()], placing.id);
     if (!check.ok) { say(check.message, 'invalid'); return; }
     if (Date.now() < cooldownUntil) { say('잠깐만 쉬었다가 다시 눌러 주세요.', 'invalid'); return; }
-    const { type, kind, id, x, y } = placing;
+    const { type, kind, id } = placing;
+    const x = check.x; const y = check.y;
     setBusy(true);
     try {
       if (type === 'create') {
@@ -350,8 +398,49 @@
     } finally { setBusy(false); }
   }
 
+  // ---------- 살아 있는 움직임(나비 날갯짓, 물고기 헤엄, 벌 날기, 흔들리는 풀) ----------
+  function animate(timeMs) {
+    if (!ctx) return;
+    const t = timeMs / 1000;
+    views.forEach((v, id) => {
+      const o = objects.get(id); if (!o || !v.image.visible) return;
+      const info = R.KINDS[o.kind]; const ph = v.phase; const img = v.image;
+      if (placing && placing.type === 'move' && placing.id === id) return;
+      switch (o.kind) {
+        case 'butterfly': {
+          const tex = Math.floor(timeMs / 120) % 2 ? 'obj_butterfly_b' : 'obj_butterfly_a';
+          if (img.texture.key !== tex) img.setTexture(tex);
+          img.setPosition(o.x + Math.sin(t * 0.8 + ph) * 18, o.y - info.lift + Math.sin(t * 1.7 + ph) * 8).setAngle(Math.sin(t * 0.8 + ph) * 9);
+          break;
+        }
+        case 'fish': {
+          const a = t * 0.5 + ph;
+          img.setPosition(o.x + Math.cos(a) * 9, o.y + Math.sin(a) * 4).setFlipX(Math.sin(a) > 0).setAngle(Math.cos(a) * 6 * (Math.sin(a) > 0 ? -1 : 1));
+          break;
+        }
+        case 'waterlily': img.setScale(v.baseScale * (1 + Math.sin(t * 1.1 + ph) * 0.02)).setAngle(Math.sin(t * 0.7 + ph) * 2); break;
+        case 'reed': case 'vine': img.setAngle(Math.sin(t * 0.9 + ph) * (o.kind === 'reed' ? 1.8 : 0.8)); break;
+        case 'rabbit': case 'squirrel': img.setScale(v.baseScale * (1 + Math.sin(t * 1.6 + ph) * 0.012), v.baseScale * (1 + Math.cos(t * 1.6 + ph) * 0.018)); break;
+        case 'beehive':
+          v.extras.forEach((bee, i) => {
+            const a = t * (2.4 + i * 0.5) + ph + i * 2.1; const rx = 24 + i * 5; const ry = 12 + i * 3;
+            bee.setPosition(o.x + Math.cos(a) * rx, o.y - info.lift + 12 + Math.sin(a * 1.3) * ry).setDepth(1000 + o.y + 3).setFlipX(Math.sin(a) > 0);
+          });
+          break;
+        default: break;
+      }
+    });
+  }
+  // 캐릭터가 지나가지 못하는 자연물 몸통, 그리고 걸어 들어갈 수 있는 작은 연못 판정 (app.js가 매 프레임 씀)
+  function colliders() {
+    const out = [];
+    objects.forEach((o) => { const info = R.KINDS[o.kind]; if (info && info.collide > 0) out.push({ x: o.x, y: o.y, r: info.collide * (o.scale || 1) }); });
+    return out;
+  }
+  function inPond(x, y) { if (!ctx) return false; return R.inUserPond(x, y, [...objects.values()], 0); }
+
   window.NaturePlacement = {
-    start, stop,
+    start, stop, animate, colliders, inPond,
     debug: { get objects() { return objects; }, get placing() { return placing; }, get views() { return views; }, get selectedId() { return selectedId; } }
   };
 })();

@@ -3,7 +3,7 @@
  *   - 같은 숫자(시드)로 그리므로 모든 학생 화면의 풍경이 똑같습니다.
  *   - 빛은 항상 왼쪽 위에서 오고, 그림자는 오른쪽 아래로 떨어집니다.
  * 결과는 Phaser 텍스처로 등록됩니다: ground(바닥 전체), tree1~3, shrubFlower, wildflowerPatch, mossyRocks,
- * fallenBranch, grassTuft, lilyReeds, bench, char_<색>.
+ * fallenBranch, grassTuft, lilyReeds, bench, char_<색>, 그리고 놓을 수 있는 자연물 obj_*(다람쥐·토끼·나비·연못·갈대·덩굴·벌집·벌·물고기·수련).
  */
 (function (root, factory) {
   root.NatureArt = factory(root.NatureRules);
@@ -530,6 +530,239 @@
     return cv;
   }
 
+  // ---------- 놓을 수 있는 자연물 (동물·연못·물풀·덩굴·벌집) ----------
+  const OUTLINE_BROWN = 'rgba(78,48,28,0.75)';
+  function ellipseFill(g, x, y, rx, ry, fill, rot = 0, stroke = null, lw = 1.4) {
+    g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, TAU); g.fillStyle = fill; g.fill();
+    if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.stroke(); }
+  }
+  function ellipseGrad(g, x, y, rx, ry, c0, c1, c2, rot = 0, stroke = OUTLINE_BROWN, lw = 1.4) {
+    const grad = g.createRadialGradient(x - rx * 0.35, y - ry * 0.4, Math.min(rx, ry) * 0.1, x, y, Math.max(rx, ry) * 1.05);
+    grad.addColorStop(0, c0); grad.addColorStop(0.55, c1); grad.addColorStop(1, c2);
+    ellipseFill(g, x, y, rx, ry, grad, rot, stroke, lw);
+  }
+  function eye(g, x, y, r) {
+    g.fillStyle = '#2a1c16'; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(x - r * 0.35, y - r * 0.4, r * 0.38, 0, TAU); g.fill();
+  }
+
+  function makeSquirrel() {
+    const [cv, g] = canvas(150, 150);
+    groundShadow(g, 80, 138, 50, 10, 0.4);
+    // 꼬리: 풍성하게 위로 휘어 올라간다
+    const tail = [[104, 122, 15], [116, 104, 17], [120, 82, 19], [112, 60, 20], [98, 44, 19], [84, 40, 16]];
+    tail.forEach(([x, y, r]) => ellipseGrad(g, x, y, r, r * 1.05, '#f2b57a', '#d98a4a', '#a45a2c', 0, 'rgba(110,60,30,0.55)', 1.2));
+    tail.slice(2).forEach(([x, y, r]) => ellipseFill(g, x - r * 0.35, y - r * 0.25, r * 0.4, r * 0.6, 'rgba(255,236,200,0.5)'));
+    // 몸
+    ellipseGrad(g, 74, 106, 31, 32, '#e9a76a', '#c97b3f', '#8f4f26');
+    ellipseGrad(g, 92, 124, 14, 11, '#d28c52', '#b36c36', '#7e431f');
+    ellipseGrad(g, 66, 112, 17, 22, '#fff1d6', '#f4d9ae', '#d7b583', 0, 'rgba(150,100,60,0.3)');
+    // 머리
+    ellipseGrad(g, 56, 66, 25, 23, '#eeb078', '#d0834a', '#955629');
+    ellipseGrad(g, 40, 46, 7, 11, '#c97b3f', '#b0662f', '#7a4220', -0.25);
+    ellipseGrad(g, 68, 42, 7, 11, '#c97b3f', '#b0662f', '#7a4220', 0.25);
+    ellipseFill(g, 40, 47, 3.2, 6, '#f6c9a0', -0.25); ellipseFill(g, 68, 43, 3.2, 6, '#f6c9a0', 0.25);
+    ellipseGrad(g, 47, 75, 14, 10, '#fff4dc', '#f5dcb3', '#dcb98a', 0, 'rgba(150,100,60,0.3)');
+    g.fillStyle = '#3a2418'; g.beginPath(); g.ellipse(36, 72, 4.2, 3.2, -0.2, 0, TAU); g.fill();
+    g.strokeStyle = '#3a2418'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(38, 76); g.quadraticCurveTo(44, 82, 51, 78); g.stroke();
+    eye(g, 48, 61, 4.2); eye(g, 66, 62, 3.8);
+    ellipseFill(g, 42, 69, 4.5, 3, 'rgba(255,130,120,0.35)'); ellipseFill(g, 70, 70, 4, 2.6, 'rgba(255,130,120,0.3)');
+    // 도토리를 두 손으로
+    ellipseGrad(g, 56, 100, 10, 12, '#e8c48a', '#c99a55', '#8a5f2a', 0, 'rgba(90,55,20,0.7)');
+    g.fillStyle = '#7a5230'; g.beginPath(); g.ellipse(56, 91, 11, 6, 0, Math.PI, TAU); g.fill(); g.strokeStyle = 'rgba(60,35,15,0.7)'; g.lineWidth = 1.2; g.stroke();
+    ellipseGrad(g, 47, 101, 6, 5, '#e9a76a', '#c97b3f', '#8f4f26'); ellipseGrad(g, 66, 101, 6, 5, '#e9a76a', '#c97b3f', '#8f4f26');
+    return cv;
+  }
+
+  function makeRabbit() {
+    const [cv, g] = canvas(150, 165);
+    groundShadow(g, 78, 150, 52, 10, 0.4);
+    // 귀
+    ellipseGrad(g, 56, 30, 9, 27, '#ffffff', '#f3ece2', '#d8cbb8', -0.16);
+    ellipseGrad(g, 82, 28, 9, 27, '#ffffff', '#f3ece2', '#d8cbb8', 0.16);
+    ellipseFill(g, 56, 33, 4, 19, '#ffc2cf', -0.16); ellipseFill(g, 82, 31, 4, 19, '#ffc2cf', 0.16);
+    // 몸·꼬리·뒷발
+    ellipseGrad(g, 78, 118, 37, 33, '#ffffff', '#f4eee4', '#d5c8b4');
+    ellipseGrad(g, 114, 130, 11, 11, '#ffffff', '#fbf7f0', '#e0d6c6');
+    ellipseGrad(g, 100, 143, 17, 8, '#fffdf8', '#efe6d8', '#cdbfa8');
+    ellipseGrad(g, 62, 144, 11, 6.5, '#fffdf8', '#efe6d8', '#cdbfa8'); ellipseGrad(g, 86, 146, 11, 6.5, '#fffdf8', '#efe6d8', '#cdbfa8');
+    // 머리
+    ellipseGrad(g, 66, 76, 29, 25, '#ffffff', '#f6f0e6', '#d9ccb8');
+    ellipseFill(g, 50, 80, 6, 4, 'rgba(255,150,160,0.38)'); ellipseFill(g, 84, 82, 6, 4, 'rgba(255,150,160,0.3)');
+    eye(g, 56, 72, 4.4); eye(g, 78, 73, 4);
+    g.fillStyle = '#f08a9c'; g.beginPath(); g.moveTo(63, 79); g.lineTo(71, 79); g.lineTo(67, 84); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(120,80,70,0.7)'; g.lineWidth = 1.4; g.beginPath(); g.moveTo(67, 84); g.lineTo(67, 87); g.moveTo(67, 87); g.quadraticCurveTo(62, 92, 57, 88); g.moveTo(67, 87); g.quadraticCurveTo(72, 92, 77, 88); g.stroke();
+    g.strokeStyle = 'rgba(150,130,110,0.5)'; g.lineWidth = 1; [[-1], [1]].forEach(([s]) => [-3, 3].forEach((d) => { g.beginPath(); g.moveTo(67 + s * 10, 84 + d * 0.4); g.lineTo(67 + s * 26, 83 + d * 2); g.stroke(); }));
+    // 앞발
+    ellipseGrad(g, 66, 128, 7, 10, '#ffffff', '#f4eee4', '#d5c8b4'); ellipseGrad(g, 82, 128, 7, 10, '#ffffff', '#f4eee4', '#d5c8b4');
+    return cv;
+  }
+
+  function makeButterfly(open) {
+    const [cv, g] = canvas(100, 80);
+    const wing = (sign) => {
+      g.save(); g.translate(50, 40); g.scale(sign * open, 1);
+      const up = g.createLinearGradient(0, -34, 40, 8); up.addColorStop(0, '#ffb347'); up.addColorStop(1, '#ee6a1a');
+      g.fillStyle = up; g.strokeStyle = '#3a2216'; g.lineWidth = 2.4;
+      g.beginPath(); g.moveTo(4, -2); g.bezierCurveTo(8, -40, 44, -42, 46, -16); g.bezierCurveTo(46, -2, 22, 6, 4, 2); g.closePath(); g.fill(); g.stroke();
+      const low = g.createLinearGradient(0, 0, 30, 30); low.addColorStop(0, '#ffc766'); low.addColorStop(1, '#e85d18');
+      g.fillStyle = low; g.beginPath(); g.moveTo(4, 2); g.bezierCurveTo(30, 2, 40, 14, 30, 30); g.bezierCurveTo(20, 40, 6, 28, 4, 4); g.closePath(); g.fill(); g.stroke();
+      g.strokeStyle = 'rgba(58,34,22,0.7)'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(6, 0); g.lineTo(38, -22); g.moveTo(6, 2); g.lineTo(40, -6); g.moveTo(6, 4); g.lineTo(26, 24); g.stroke();
+      g.fillStyle = '#fff'; [[36, -26, 3.2], [42, -14, 2.6], [30, 20, 2.6], [20, 28, 2]].forEach(([x, y, r]) => { g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); });
+      g.restore();
+    };
+    wing(1); wing(-1);
+    g.fillStyle = '#2b1a12'; g.beginPath(); g.ellipse(50, 42, 3.6, 17, 0, 0, TAU); g.fill();
+    g.beginPath(); g.arc(50, 22, 4.2, 0, TAU); g.fill();
+    g.strokeStyle = '#2b1a12'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(49, 19); g.quadraticCurveTo(44, 8, 38, 6); g.moveTo(51, 19); g.quadraticCurveTo(56, 8, 62, 6); g.stroke();
+    return cv;
+  }
+
+  function makePond() {
+    const [cv, g] = canvas(220, 150); const rand = rng(91);
+    // 흙 가장자리
+    const mud = g.createRadialGradient(100, 66, 10, 110, 78, 100); mud.addColorStop(0, '#9a7650'); mud.addColorStop(1, '#6f5334');
+    g.fillStyle = 'rgba(30,50,30,0.28)'; g.beginPath(); g.ellipse(116, 86, 96, 60, 0, 0, TAU); g.fill();
+    g.fillStyle = mud; g.beginPath(); g.ellipse(110, 78, 92, 59, 0, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(60,40,24,0.5)'; g.lineWidth = 2; g.stroke();
+    // 물
+    const water = g.createLinearGradient(50, 30, 170, 120); water.addColorStop(0, '#78d4e2'); water.addColorStop(0.5, '#3fa6cc'); water.addColorStop(1, '#2477a8');
+    g.fillStyle = water; g.beginPath(); g.ellipse(110, 75, 74, 48, 0, 0, TAU); g.fill();
+    g.save(); g.beginPath(); g.ellipse(110, 75, 74, 48, 0, 0, TAU); g.clip();
+    const sh = g.createLinearGradient(0, 27, 0, 52); sh.addColorStop(0, 'rgba(20,50,70,0.4)'); sh.addColorStop(1, 'rgba(20,50,70,0)');
+    g.fillStyle = sh; g.fillRect(30, 27, 160, 26); // 위쪽 가장자리 그림자
+    g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.ellipse(88, 62, 30, 9, -0.15, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(235,255,255,0.6)'; g.lineWidth = 1.8; [[100, 90, 26], [138, 70, 18], [120, 100, 14], [80, 80, 12]].forEach(([x, y, w]) => { g.beginPath(); g.moveTo(x - w, y); g.quadraticCurveTo(x - w / 2, y - 4, x, y); g.quadraticCurveTo(x + w / 2, y + 4, x + w, y); g.stroke(); });
+    g.restore();
+    g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 2; g.beginPath(); g.ellipse(110, 75, 74, 48, 0, 0.15, Math.PI - 0.15); g.stroke();
+    // 가장자리 돌
+    for (let i = 0; i < 17; i += 1) {
+      const a = (i / 17) * TAU + rand() * 0.2; const x = 110 + Math.cos(a) * 83; const y = 78 + Math.sin(a) * 53; const r = 6 + rand() * 5;
+      ellipseGrad(g, x, y, r * 1.3, r, '#f1f1ea', '#b4bab4', '#707a76', rand(), 'rgba(55,64,62,0.55)', 1.3);
+    }
+    // 풀
+    for (let i = 0; i < 46; i += 1) { const a = rand() * TAU; const x = 110 + Math.cos(a) * (88 + rand() * 8); const y = 80 + Math.sin(a) * (57 + rand() * 6); blade(g, x, y, 10 + rand() * 14, (rand() - 0.5) * 12, 2.2, i % 3 ? '#4aa04d' : '#8fd35c'); }
+    return cv;
+  }
+
+  function makeReedTall() {
+    const [cv, g] = canvas(150, 230); const rand = rng(17); const base = 212;
+    groundShadow(g, 82, base + 4, 52, 9, 0.36);
+    const stems = [];
+    for (let i = 0; i < 17; i += 1) stems.push({ x: 52 + rand() * 46, h: 120 + rand() * 82, bend: (rand() - 0.5) * 46, cat: i % 5 === 2 });
+    stems.sort((a, b) => b.h - a.h);
+    stems.forEach((s, i) => {
+      const col = i % 3 === 0 ? '#5d9c46' : (i % 3 === 1 ? '#7fb956' : '#4b8a3e');
+      g.lineCap = 'round'; g.strokeStyle = col; g.lineWidth = s.cat ? 3.2 : 4.4;
+      g.beginPath(); g.moveTo(s.x, base); g.quadraticCurveTo(s.x + s.bend * 0.25, base - s.h * 0.55, s.x + s.bend, base - s.h); g.stroke();
+      g.strokeStyle = 'rgba(220,245,160,0.45)'; g.lineWidth = 1.4; g.beginPath(); g.moveTo(s.x - 1, base); g.quadraticCurveTo(s.x + s.bend * 0.25 - 1, base - s.h * 0.55, s.x + s.bend - 1, base - s.h); g.stroke();
+      if (s.cat) {
+        g.save(); g.translate(s.x + s.bend, base - s.h + 4); g.rotate(s.bend * 0.01);
+        const cg = g.createLinearGradient(-5, 0, 5, 0); cg.addColorStop(0, '#c58f58'); cg.addColorStop(1, '#5e3a22'); g.fillStyle = cg; g.strokeStyle = 'rgba(50,30,16,0.6)'; g.lineWidth = 1.2;
+        g.beginPath(); g.ellipse(0, 4, 5.4, 19, 0, 0, TAU); g.fill(); g.stroke();
+        g.strokeStyle = '#8a9a50'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, -17); g.lineTo(0, -28); g.stroke(); g.restore();
+      }
+    });
+    // 바깥으로 휘는 긴 잎
+    for (let i = 0; i < 9; i += 1) { const side = i % 2 ? 1 : -1; blade(g, 75 + side * (4 + rand() * 12), base, 62 + rand() * 60, side * (30 + rand() * 40), 3.4, i % 2 ? '#79b457' : '#4f9144'); }
+    for (let i = 0; i < 10; i += 1) blade(g, 50 + rand() * 54, base + 1, 14 + rand() * 16, (rand() - 0.5) * 20, 2.4, '#8fd35c');
+    return cv;
+  }
+
+  function makeVine() {
+    const [cv, g] = canvas(150, 210); const rand = rng(44); const base = 192;
+    groundShadow(g, 80, base + 4, 54, 9, 0.38);
+    const wood = (w, c, dx = 0) => { g.strokeStyle = c; g.lineWidth = w; g.lineCap = 'round'; g.beginPath(); g.moveTo(38 + dx, base); g.lineTo(38 + dx, 78); g.arc(75, 78, 37 - dx, Math.PI, TAU); g.lineTo(112 - dx, base); g.stroke(); };
+    wood(8, '#5a3a22'); wood(5.5, '#9a7248'); wood(1.8, 'rgba(236,206,160,0.8)', -1.5);
+    g.strokeStyle = '#8a643d'; g.lineWidth = 4; [118, 154].forEach((y) => { g.beginPath(); g.moveTo(38, y); g.lineTo(112, y); g.stroke(); });
+    // 덩굴 줄기
+    const pts = [];
+    for (let i = 0; i <= 90; i += 1) { const t = i / 90; let x; let y; if (t < 0.38) { const u = t / 0.38; y = base - 6 - u * (base - 84); x = 40 + Math.sin(u * 11) * 11; } else if (t < 0.7) { const u = (t - 0.38) / 0.32; const a = Math.PI - u * Math.PI; x = 75 + Math.cos(a) * 37 + Math.sin(u * 14) * 6; y = 78 - Math.sin(a) * 37 + Math.cos(u * 14) * 6; } else { const u = (t - 0.7) / 0.3; y = 84 + u * 70; x = 110 + Math.sin(u * 8) * 11; } pts.push([x, y]); }
+    g.strokeStyle = '#2f7a3e'; g.lineWidth = 4.2; g.lineJoin = 'round'; g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke();
+    g.strokeStyle = 'rgba(170,230,110,0.55)'; g.lineWidth = 1.4; g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x - 1, y - 1) : g.moveTo(x - 1, y - 1))); g.stroke();
+    // 잎(하트 모양)
+    pts.forEach(([x, y], i) => {
+      if (i % 3 !== 0) return; const a = rand() * TAU; const s = 6.5 + rand() * 3.5;
+      g.save(); g.translate(x, y); g.rotate(a); const lg = g.createLinearGradient(-s, -s, s, s); lg.addColorStop(0, '#b5ea78'); lg.addColorStop(1, '#3d9a4a'); g.fillStyle = lg; g.strokeStyle = 'rgba(30,90,45,0.55)'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(0, s * 1.1); g.bezierCurveTo(-s * 1.5, s * 0.1, -s * 0.9, -s, 0, -s * 0.35); g.bezierCurveTo(s * 0.9, -s, s * 1.5, s * 0.1, 0, s * 1.1); g.fill(); g.stroke(); g.restore();
+    });
+    // 나팔꽃
+    [[16, '#7e8cff'], [30, '#ff8fbf'], [44, '#7e8cff'], [58, '#b98aff'], [72, '#ff8fbf']].forEach(([i, c], k) => {
+      const [x, y] = pts[i + 4 + k * 2] || pts[10]; g.save(); g.translate(x + (k % 2 ? 7 : -7), y);
+      for (let n = 0; n < 5; n += 1) { const t = (n / 5) * TAU; g.fillStyle = c; g.beginPath(); g.ellipse(Math.cos(t) * 5.5, Math.sin(t) * 5.5, 5.2, 4, t, 0, TAU); g.fill(); }
+      g.fillStyle = '#fff6c4'; g.beginPath(); g.arc(0, 0, 3.2, 0, TAU); g.fill(); g.restore();
+    });
+    return cv;
+  }
+
+  function makeHive() {
+    const [cv, g] = canvas(100, 124);
+    g.strokeStyle = '#5a3a22'; g.lineWidth = 3; g.beginPath(); g.moveTo(50, 2); g.lineTo(50, 22); g.stroke();
+    ellipseFill(g, 50, 4, 5, 4, '#7a5230', 0, '#4a2f1a');
+    const dome = () => { g.beginPath(); g.moveTo(16, 104); g.bezierCurveTo(12, 70, 22, 36, 50, 22); g.bezierCurveTo(78, 36, 88, 70, 84, 104); g.closePath(); };
+    g.save(); dome(); g.clip();
+    const grad = g.createLinearGradient(14, 30, 86, 104); grad.addColorStop(0, '#ffe08a'); grad.addColorStop(0.5, '#eab549'); grad.addColorStop(1, '#a8741f'); g.fillStyle = grad; g.fillRect(0, 0, 100, 124);
+    g.strokeStyle = 'rgba(120,76,20,0.65)'; g.lineWidth = 2.2; [38, 52, 66, 80, 94].forEach((y, i) => { g.beginPath(); g.moveTo(6, y + 6); g.quadraticCurveTo(50, y - 8 - i * 0.8, 94, y + 6); g.stroke(); });
+    g.strokeStyle = 'rgba(255,240,170,0.55)'; g.lineWidth = 1.4; [37, 51, 65, 79, 93].forEach((y, i) => { g.beginPath(); g.moveTo(10, y + 3); g.quadraticCurveTo(50, y - 11 - i * 0.8, 90, y + 3); g.stroke(); });
+    g.restore();
+    g.strokeStyle = 'rgba(90,56,16,0.8)'; g.lineWidth = 2.4; dome(); g.stroke();
+    ellipseFill(g, 50, 106, 38, 8, '#8a6039', 0, '#4a2f1a', 2);
+    ellipseFill(g, 50, 92, 11, 9, '#3a2412', 0, '#2a180c', 1.6);
+    ellipseFill(g, 50, 94, 6, 5, '#140c06');
+    g.fillStyle = '#f6b82b'; g.beginPath(); g.moveTo(66, 100); g.quadraticCurveTo(70, 112, 66, 116); g.quadraticCurveTo(62, 112, 66, 100); g.fill();
+    return cv;
+  }
+  function makeBee() {
+    const [cv, g] = canvas(26, 20);
+    ellipseFill(g, 9, 6, 7, 4, 'rgba(235,248,255,0.85)', -0.5, 'rgba(120,150,170,0.7)', 1); ellipseFill(g, 16, 6, 7, 4, 'rgba(235,248,255,0.8)', 0.5, 'rgba(120,150,170,0.7)', 1);
+    ellipseFill(g, 13, 13, 8, 5.2, '#ffcf2e', 0, '#3a2a10', 1.2);
+    g.fillStyle = '#2a1c0c'; [9, 14].forEach((x) => g.fillRect(x, 8.5, 2.4, 9)); ellipseFill(g, 6, 13, 2.8, 2.8, '#2a1c0c');
+    return cv;
+  }
+
+  function makeFish() {
+    const [cv, g] = canvas(100, 60);
+    // 물에 비친 그림자와 잔물결
+    ellipseFill(g, 52, 36, 34, 11, 'rgba(10,60,90,0.22)');
+    g.strokeStyle = 'rgba(235,255,255,0.5)'; g.lineWidth = 1.6; [[52, 29, 42, 15, 0.6], [52, 29, 49, 20, 0.3]].forEach(([x, y, rx, ry, a]) => { g.globalAlpha = a; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, TAU); g.stroke(); }); g.globalAlpha = 1;
+    // 꼬리
+    const tailG = g.createLinearGradient(0, 18, 24, 40); tailG.addColorStop(0, 'rgba(255,170,90,0.9)'); tailG.addColorStop(1, 'rgba(255,214,170,0.75)');
+    g.fillStyle = tailG; g.strokeStyle = 'rgba(190,80,30,0.6)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(26, 29); g.bezierCurveTo(14, 20, 6, 12, 2, 14); g.bezierCurveTo(10, 24, 8, 34, 2, 44); g.bezierCurveTo(8, 46, 18, 38, 26, 29); g.fill(); g.stroke();
+    // 등지느러미·가슴지느러미
+    g.fillStyle = 'rgba(255,175,100,0.85)'; g.beginPath(); g.moveTo(38, 21); g.quadraticCurveTo(50, 8, 62, 21); g.closePath(); g.fill(); g.stroke();
+    ellipseFill(g, 52, 37, 9, 4, 'rgba(255,190,120,0.9)', 0.5, 'rgba(190,80,30,0.6)', 1.1);
+    // 몸
+    const body = g.createLinearGradient(30, 18, 70, 42); body.addColorStop(0, '#ffb35a'); body.addColorStop(0.55, '#ff7a2e'); body.addColorStop(1, '#d64a1c');
+    g.fillStyle = body; g.strokeStyle = 'rgba(150,50,20,0.7)'; g.lineWidth = 1.6; g.beginPath(); g.ellipse(52, 29, 30, 12.5, 0, 0, TAU); g.fill(); g.stroke();
+    g.save(); g.beginPath(); g.ellipse(52, 29, 30, 12.5, 0, 0, TAU); g.clip();
+    ellipseFill(g, 48, 22, 11, 6, '#fffaf0'); ellipseFill(g, 68, 28, 6, 5, '#ffffff'); ellipseFill(g, 36, 33, 7, 4, '#e8391d');
+    g.fillStyle = 'rgba(255,255,255,0.3)'; g.beginPath(); g.ellipse(46, 22, 22, 4, -0.08, 0, TAU); g.fill(); g.restore();
+    ellipseFill(g, 74, 26, 4.4, 4.4, '#fff', 0, 'rgba(90,40,20,0.7)', 1); ellipseFill(g, 75, 26, 2.2, 2.2, '#1d120c');
+    return cv;
+  }
+
+  function makeWaterlily() {
+    const [cv, g] = canvas(130, 100);
+    // 잔물결
+    g.strokeStyle = 'rgba(235,255,255,0.5)'; g.lineWidth = 1.8; [[0.7, 54, 30], [0.4, 62, 36]].forEach(([a, rx, ry]) => { g.globalAlpha = a; g.beginPath(); g.ellipse(65, 58, rx, ry, 0, 0, TAU); g.stroke(); }); g.globalAlpha = 1;
+    const pad = (x, y, r, rot, seed) => {
+      g.save(); g.translate(x, y); g.rotate(rot); g.scale(1, 0.62);
+      g.fillStyle = 'rgba(10,60,80,0.25)'; g.beginPath(); g.ellipse(4, 6, r, r, 0, 0, TAU); g.fill();
+      const lg = g.createRadialGradient(-r * 0.35, -r * 0.35, 3, 0, 0, r); lg.addColorStop(0, '#b6ee7a'); lg.addColorStop(0.6, '#59b24f'); lg.addColorStop(1, '#2f8444');
+      g.fillStyle = lg; g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, r, 0.4, TAU - 0.1); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(25,90,45,0.55)'; g.lineWidth = 1.6; g.stroke();
+      g.strokeStyle = 'rgba(25,90,45,0.35)'; g.lineWidth = 1; for (let k = 0; k < 6; k += 1) { const a = 0.7 + k * 0.9; g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9); g.stroke(); }
+      g.restore(); void seed;
+    };
+    pad(40, 62, 32, 0.4, 1); pad(94, 70, 22, 2.4, 2);
+    // 분홍 꽃
+    const petal = (len, wid, color0, color1, ang) => { g.save(); g.translate(68, 50); g.rotate(ang); const pg = g.createLinearGradient(0, 0, len, 0); pg.addColorStop(0, color0); pg.addColorStop(1, color1); g.fillStyle = pg; g.strokeStyle = 'rgba(190,90,130,0.45)'; g.lineWidth = 1; g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(len * 0.5, -wid, len, 0); g.quadraticCurveTo(len * 0.5, wid, 0, 0); g.fill(); g.stroke(); g.restore(); };
+    for (let k = 0; k < 8; k += 1) petal(24, 8, '#ffd6e6', '#ff9cc2', (k / 8) * TAU + 0.2);
+    for (let k = 0; k < 6; k += 1) petal(17, 7, '#fff2f7', '#ffb3d0', (k / 6) * TAU + 0.5);
+    ellipseFill(g, 68, 50, 5.5, 4.4, '#ffd23f'); for (let k = 0; k < 8; k += 1) { const t = (k / 8) * TAU; g.fillStyle = '#ffb81c'; g.beginPath(); g.arc(68 + Math.cos(t) * 5, 50 + Math.sin(t) * 4, 1.4, 0, TAU); g.fill(); }
+    return cv;
+  }
+
   // ---------- 풍경 배치 ----------
   // 이미 놓여 있는 나무·덤불·바위 (R.STATIC_BLOCKERS와 같은 자리)
   const FLORA = [
@@ -551,6 +784,9 @@
     add('ground', paintGround());
     TREE_PALETTES.forEach((pal, i) => add(`tree${i + 1}`, makeTree(101 + i * 17, pal)));
     add('shrubFlower', makeShrub()); add('wildflowerPatch', makeWildflowers()); add('mossyRocks', makeRocks());
+    add('obj_squirrel', makeSquirrel()); add('obj_rabbit', makeRabbit()); add('obj_butterfly_a', makeButterfly(1)); add('obj_butterfly_b', makeButterfly(0.42));
+    add('obj_pond', makePond()); add('obj_reed', makeReedTall()); add('obj_vine', makeVine()); add('obj_hive', makeHive()); add('obj_bee', makeBee());
+    add('obj_fish', makeFish()); add('obj_lily', makeWaterlily());
     add('fallenBranch', makeBranch()); add('grassTuft', makeTuft()); add('lilyReeds', makeReeds()); add('bench', makeBench());
     CHARACTER_COLORS.forEach((c) => [false, true].forEach((back) => {
       add(characterKey(c, back, null), makeCharacter(c, back, null));
