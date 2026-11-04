@@ -1,4 +1,4 @@
-:root { color-scheme: light; font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif; color: #173c36; background: linear-gradient(135deg, #fff9e8, #eaf7ed); }
+:root { color-scheme: light; font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif; color: #173c36; background: linear-gradient(135deg, #e4f3dc, #d2e9ca) fixed; }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; }
 main { width: min(1100px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
@@ -7,7 +7,7 @@ header { display: flex; justify-content: space-between; gap: 20px; align-items: 
 .site-title h1 { margin: 0; line-height: 0; }
 .site-title a { display: inline-block; border-radius: 12px; }
 .site-title a:focus-visible { outline: 3px solid #f2a900; outline-offset: 3px; }
-.site-title img { display: block; width: min(400px, 78vw); height: auto; mix-blend-mode: multiply; } /* 흰 바탕이 배경에 녹아들도록 곱하기 합성 */
+.site-title img { display: block; width: min(200px, 40vw); height: auto; mix-blend-mode: multiply; } /* 흰 바탕이 배경에 녹아들도록 곱하기 합성 */
 .header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 h1, h2, p { margin-top: 0; }
 h1 { font-size: clamp(1.7rem, 4vw, 2.5rem); margin-bottom: 6px; }
