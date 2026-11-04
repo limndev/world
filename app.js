@@ -207,7 +207,7 @@
     drawLandmarks() {
       const labelStyle = { fontFamily: 'Pretendard, sans-serif', fontSize: '17px', fontStyle: 'bold', color: '#225343', backgroundColor: '#fffce9dd', padding: { x: 9, y: 5 } };
       ZONES.forEach((zone) => this.add.text(zone.x + 22, zone.y + 20, zone.name, labelStyle).setDepth(1500));
-      this.add.text(32, 26, '☀ 함께 걷는 자연 탐험', { fontFamily: 'Pretendard, sans-serif', fontSize: '23px', fontStyle: 'bold', color: '#225343', backgroundColor: '#fffce9e8', padding: { x: 12, y: 8 } }).setScrollFactor(0).setDepth(2000);
+      this.add.text(32, 26, '☀ 모두 함께 만드는 우리의 공간', { fontFamily: 'Pretendard, sans-serif', fontSize: '23px', fontStyle: 'bold', color: '#225343', backgroundColor: '#fffce9e8', padding: { x: 12, y: 8 } }).setScrollFactor(0).setDepth(2000);
     }
   }
 

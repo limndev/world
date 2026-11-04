@@ -1,5 +1,6 @@
 :root { color-scheme: light; font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif; color: #173c36; background: linear-gradient(135deg, #e4f3dc, #d2e9ca) fixed; }
 * { box-sizing: border-box; }
+html { word-break: keep-all; overflow-wrap: break-word; } /* 한국어는 글자 중간이 아니라 어절(띄어쓰기) 단위로 줄을 바꾼다. 아주 긴 덩어리만 어쩔 수 없이 자름 */
 body { margin: 0; min-width: 320px; min-height: 100vh; color: #173c36; background: #dcedd4 linear-gradient(135deg, #e4f3dc, #d2e9ca) fixed; } /* 미리보기 틀이 body를 흰색으로 칠하므로 body에도 직접 지정 */
 main { width: min(1100px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
 header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; margin-bottom: 20px; }

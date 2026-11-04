@@ -30,7 +30,7 @@
   }
   function fileText(value) {
     const t = stamp();
-    return `함께 걷는 자연 공간 - 입장 코드\n만든 때: ${t.day} ${t.time}\n\n입장 코드: ${value}\n\n※ 이 파일은 공개된 곳(GitHub, 공유 폴더)에 올리지 마세요.\n※ Supabase에 아래 SQL을 실행해야 이 코드로 바뀝니다. 실행하기 전까지는 이전 코드가 계속 쓰여요.\n\n----- Supabase SQL Editor에 붙여넣을 내용 -----\n${sqlFor(value)}\n`;
+    return `모두 함께 만드는 우리의 공간 - 입장 코드\n만든 때: ${t.day} ${t.time}\n\n입장 코드: ${value}\n\n※ 이 파일은 공개된 곳(GitHub, 공유 폴더)에 올리지 마세요.\n※ Supabase에 아래 SQL을 실행해야 이 코드로 바뀝니다. 실행하기 전까지는 이전 코드가 계속 쓰여요.\n\n----- Supabase SQL Editor에 붙여넣을 내용 -----\n${sqlFor(value)}\n`;
   }
   function say(text) { $('cm-status').textContent = text; }
   function render() {
