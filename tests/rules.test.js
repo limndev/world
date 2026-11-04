@@ -65,7 +65,7 @@ test('땅 규칙: 물·길·장식·경계', () => {
   assert.strictEqual(R.groundBlock('rock', 640, 520), null); // 풀밭
 });
 
-test('작은 섬: 작은 자연물은 섬 가운데에 놓을 수 있고, 큰 관목은 놓을 수 없다', () => {
+test('작은 섬: 작은 놓은 것은 섬 가운데에 놓을 수 있고, 큰 관목은 놓을 수 없다', () => {
   assert.strictEqual(R.groundBlock('wildflower', 1605, 480), null);
   assert.strictEqual(R.groundBlock('rock', 1605, 480), null);
   assert.strictEqual(R.groundBlock('shrub', 1605, 480), null); // 관목(너비 150)은 섬(안쪽 땅 178)에 겨우 들어간다

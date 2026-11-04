@@ -3,7 +3,7 @@
  *   - 같은 숫자(시드)로 그리므로 모든 학생 화면의 풍경이 똑같습니다.
  *   - 빛은 항상 왼쪽 위에서 오고, 그림자는 오른쪽 아래로 떨어집니다.
  * 결과는 Phaser 텍스처로 등록됩니다: ground(바닥 전체), tree1~3, shrubFlower, wildflowerPatch, mossyRocks,
- * fallenBranch, grassTuft, lilyReeds, bench, char_<색>, 그리고 놓을 수 있는 자연물 obj_*(다람쥐·토끼·나비·연못·갈대·덩굴·벌집·벌·물고기·수련).
+ * fallenBranch, grassTuft, lilyReeds, bench, char_<색>, 그리고 놓을 수 있는 놓는 것 obj_*(다람쥐·토끼·나비·연못·갈대·덩굴·벌집·벌·물고기·수련).
  */
 (function (root, factory) {
   root.NatureArt = factory(root.NatureRules);
@@ -589,7 +589,7 @@
     return cv;
   }
 
-  // ---------- 놓을 수 있는 자연물 (동물·연못·물풀·덩굴·벌집) ----------
+  // ---------- 놓을 수 있는 놓는 것 (동물·연못·물풀·덩굴·벌집) ----------
   const OUTLINE_BROWN = 'rgba(78,48,28,0.75)';
   function ellipseFill(g, x, y, rx, ry, fill, rot = 0, stroke = null, lw = 1.4) {
     g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, TAU); g.fillStyle = fill; g.fill();

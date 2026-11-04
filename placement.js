@@ -1,5 +1,5 @@
 /*
- * 자연물 설치 화면: 패널(고르기·놓기·옮기기·지우기)과 게임 화면 위의 자연물 그리기.
+ * 놓는 것 설치 화면: 패널(고르기·놓기·옮기기·지우기)과 게임 화면 위의 놓는 것 그리기.
  * 서버와의 통신은 data.js(NatureData)만 쓰고, 땅 규칙은 placement-rules.js(NatureRules)만 씁니다.
  */
 (() => {
@@ -36,7 +36,7 @@
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const mineList = () => [...objects.values()].filter((o) => o.owner_id === ctx.meId);
   const isMine = (o) => o && ctx && o.owner_id === ctx.meId;
-  const label = (kind) => (R.KINDS[kind] ? R.KINDS[kind].label : '자연물');
+  const label = (kind) => (R.KINDS[kind] ? R.KINDS[kind].label : '이것');
   const originY = (info) => (info.originY === undefined ? 0.86 : info.originY);
   const liftOf = (info) => info.lift || 0;
   const depthOf = (info, o) => (info.ground ? (info.originY === 0.5 && info !== R.KINDS.pond ? 10 + o.y / 10000 : 9) : 1000 + o.y);
@@ -53,7 +53,7 @@
     ringGfx = scene.add.graphics().setDepth(3000);
     selGfx = scene.add.graphics().setDepth(1990);
     E.panel.hidden = false;
-    E.note.textContent = mode === 'mock' ? '시험 모드예요. 놓은 자연물은 이 화면에서만 보여요.' : '내가 놓은 자연물은 함께 있는 친구들 화면에도 보여요.';
+    E.note.textContent = mode === 'mock' ? '시험 모드예요. 놓은 것은 이 화면에서만 보여요.' : '내가 놓은 것은 함께 있는 친구들 화면에도 보여요.';
     buildKindButtons();
     E.confirm.onclick = confirmPlacement;
     E.cancel.onclick = () => endPlacement('취소했어요.');
@@ -63,9 +63,9 @@
     G.worldPointerHandler = onWorldPointer;
     window.addEventListener('keydown', onKeydown, true);
     ctx.unsubscribe = data.subscribe(onEvent, onSyncStatus);
-    data.list().then((rows) => onSnapshot(rows, Date.now())).catch(() => say('자연물을 불러오지 못했어요. 잠시 뒤에 다시 읽어 와요.', 'invalid'));
+    data.list().then((rows) => onSnapshot(rows, Date.now())).catch(() => say('놓은 것들을 불러오지 못했어요. 잠시 뒤에 다시 읽어 와요.', 'invalid'));
     renderLists();
-    say('놓고 싶은 자연물 그림을 누르면 내 앞에 바로 놓여요. 내가 놓은 자연물을 화면에서 누르면 지워져요.');
+    say('놓고 싶은 그림을 누르면 내 앞에 바로 놓여요. 내가 놓은 것을 화면에서 누르면 지워져요.');
   }
 
   function stop() {
@@ -82,7 +82,7 @@
     ctx = null;
   }
 
-  // ---------- 자연물 고르기 버튼: 글자 없이 그림만 (이름은 소리 읽기용 aria-label에만) ----------
+  // ---------- 놓는 것 고르기 버튼: 글자 없이 그림만 (이름은 소리 읽기용 aria-label에만) ----------
   // 텍스처에서 그림이 있는 부분만 잘라 정사각형 칸에 맞춰 그린다.
   function iconCanvas(kind, size) {
     const info = R.KINDS[kind];
@@ -130,7 +130,7 @@
       const image = scene.add.image(o.x, o.y, info.texture).setOrigin(0.5, originY(info));
       if (o.kind !== 'pond') { // 연못은 눌러도 선택되지 않게 한다(물 위를 눌러 걸어 들어갈 수 있도록). 목록에서 고른다.
         image.setInteractive({ useHandCursor: true });
-        image.on('pointerdown', () => { // 내 자연물은 맵에서 한 번 누르면 바로 지워지고, 친구 것은 누르면 정보만 보인다
+        image.on('pointerdown', () => { // 내 놓는 것은 맵에서 한 번 누르면 바로 지워지고, 친구 것은 누르면 정보만 보인다
         if (placing) return; const cur = objects.get(o.id); if (!cur) return;
         if (isMine(cur)) removeMine(cur); else select(cur.id);
       });
@@ -180,8 +180,8 @@
     if (!objects.has(id)) return;
     const wasSelected = selectedId === id;
     objects.delete(id); dropView(id);
-    if (wasSelected) deselect('선택했던 자연물이 사라졌어요.');
-    if (placing && placing.type === 'move' && placing.id === id) endPlacement('옮기던 자연물이 사라졌어요.');
+    if (wasSelected) deselect('선택했던 것이 사라졌어요.');
+    if (placing && placing.type === 'move' && placing.id === id) endPlacement('옮기던 것이 사라졌어요.');
     afterObjectsChanged();
   }
   function onSnapshot(rows, startedAt) {
@@ -201,13 +201,13 @@
     renderWorldState();
   }
   function afterObjectsChanged() { renderLists(); renderWorldState(); refreshStranded(); if (placing) refreshCandidate(false); }
-  function renderWorldState() { if (E && E.worldState) E.worldState.textContent = `자연물 ${objects.size}개${syncNote ? ` · ${syncNote}` : ''}`; }
+  function renderWorldState() { if (E && E.worldState) E.worldState.textContent = `놓인 것 ${objects.size}개${syncNote ? ` · ${syncNote}` : ''}`; }
 
   // ---------- 목록 ----------
   function renderLists() {
     if (!ctx) return;
     const mine = mineList();
-    E.count.textContent = `내 자연물 ${mine.length}/${R.PER_USER_LIMIT}개 · 친구들이 놓은 자연물 ${objects.size - mine.length}개`;
+    E.count.textContent = `내가 놓은 것 ${mine.length}/${R.PER_USER_LIMIT}개 · 친구들이 놓은 것 ${objects.size - mine.length}개`;
     E.list.replaceChildren(...mine.map((o) => {
       const li = document.createElement('li');
       const b = document.createElement('button');
@@ -219,7 +219,7 @@
       li.append(b);
       return li;
     }));
-    if (!mine.length) { const li = document.createElement('li'); li.className = 'np-empty'; li.textContent = '아직 놓은 자연물이 없어요.'; E.list.append(li); }
+    if (!mine.length) { const li = document.createElement('li'); li.className = 'np-empty'; li.textContent = '아직 놓은 것이 없어요.'; E.list.append(li); }
   }
 
   // ---------- 선택 ----------
@@ -239,9 +239,9 @@
     const mine = isMine(o);
     E.selected.hidden = false;
     E.selTitle.textContent = `${mine ? '내' : '친구의'} ${label(o.kind)}`;
-    E.selText.textContent = mine ? `${R.zoneAt(o).name}에 있어요.` : `${R.zoneAt(o).name}에 있어요. 친구가 놓은 자연물은 옮기거나 지울 수 없어요.`;
+    E.selText.textContent = mine ? `${R.zoneAt(o).name}에 있어요.` : `${R.zoneAt(o).name}에 있어요. 친구가 놓은 것은 옮기거나 지울 수 없어요.`;
     E.move.hidden = !mine; E.del.hidden = !mine;
-    // 같은 자연물을 다시 그리는 경우(새로 읽기 등)에는 '한 번 더 누르세요' 상태를 풀지 않는다.
+    // 같은 놓는 것을 다시 그리는 경우(새로 읽기 등)에는 '한 번 더 누르세요' 상태를 풀지 않는다.
     if (shownId !== selectedId) resetDeleteButton();
     shownId = selectedId;
     const info = R.KINDS[o.kind];
@@ -434,7 +434,7 @@
     resetDeleteButton();
     await removeMine(o);
   }
-  // 내 자연물 지우기(패널의 '지우기' 두 번 누르기와 맵에서 한 번 누르기가 함께 쓴다)
+  // 내 놓는 것 지우기(패널의 '지우기' 두 번 누르기와 맵에서 한 번 누르기가 함께 쓴다)
   async function removeMine(o) {
     if (!ctx || busy || !o || !isMine(o)) return;
     if (Date.now() < cooldownUntil) { say('잠깐만 쉬었다가 다시 눌러 주세요.', 'invalid'); return; }
@@ -483,7 +483,7 @@
       }
     });
   }
-  // 캐릭터가 지나가지 못하는 자연물 몸통, 그리고 걸어 들어갈 수 있는 작은 연못 판정 (app.js가 매 프레임 씀)
+  // 캐릭터가 지나가지 못하는 놓는 것 몸통, 그리고 걸어 들어갈 수 있는 작은 연못 판정 (app.js가 매 프레임 씀)
   function colliders() {
     const out = [];
     objects.forEach((o) => { const info = R.KINDS[o.kind]; if (info && info.collide > 0) out.push({ x: o.x, y: o.y, r: info.collide * (o.scale || 1) }); });

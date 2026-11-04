@@ -33,7 +33,7 @@ button:focus-visible, input:focus-visible, .download-link:focus-visible { outlin
 #presence-list li { padding: 4px 0; }
 @media (max-width: 760px) { main { width: min(100% - 24px, 1100px); padding-top: 18px; } header, .world-layout { display: block; } .header-actions { justify-content: flex-start; margin-top: 12px; } .form-grid { grid-template-columns: 1fr; } aside { margin-top: 20px; } }
 
-/* ---- 입장 코드와 자연물 놓기 ---- */
+/* ---- 입장 코드와 놓는 것 놓기 ---- */
 [hidden] { display: none !important; }
 #join-card { width: 100%; max-width: 560px; margin: 0 auto; }
 #join-code { font-size: clamp(1.15rem, 6.2vw, 1.6rem); letter-spacing: .14em; text-transform: uppercase; text-align: center; }

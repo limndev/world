@@ -86,8 +86,8 @@
       });
       this.input.on('pointerdown', (pointer) => {
         const point = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-        if (game.worldPointerHandler && game.worldPointerHandler(point, 'down')) return; // 자연물 설치 중이면 위치 고르기로 씀
-        if (this.input.hitTestPointer(pointer).length > 0) return; // 설치된 자연물을 눌렀을 땐 걷지 않고 선택만
+        if (game.worldPointerHandler && game.worldPointerHandler(point, 'down')) return; // 놓는 것 설치 중이면 위치 고르기로 씀
+        if (this.input.hitTestPointer(pointer).length > 0) return; // 설치된 놓는 것을 눌렀을 땐 걷지 않고 선택만
         this.walking = true;
         this.touchTarget = point;
       });
@@ -126,12 +126,12 @@
       while (left > 0.0001) { const step = Math.min(left, 1 / 30); this.stepPlayer(step); left -= step; }
       sendLocation();
     }
-    // 걷기: 속도가 서서히 붙고 서서히 줄며, 자연물에 닿으면 막혀서 옆으로 미끄러진다.
+    // 걷기: 속도가 서서히 붙고 서서히 줄며, 놓는 것에 닿으면 막혀서 옆으로 미끄러진다.
     stepPlayer(dt) {
       const me = state.me;
       const vel = this.vel || (this.vel = { x: 0, y: 0 });
       let dx = 0; let dy = 0;
-      if (!game.inputLocked) { // 자연물을 놓는 중에는 걷지 않는다(미끄러지던 속도는 줄어든다)
+      if (!game.inputLocked) { // 놓는 것을 놓는 중에는 걷지 않는다(미끄러지던 속도는 줄어든다)
         if (this.cursors.left.isDown) dx -= 1;
         if (this.cursors.right.isDown) dx += 1;
         if (this.cursors.up.isDown) dy -= 1;
@@ -144,7 +144,7 @@
         if (dist < 8) { this.touchTarget = null; dx = 0; dy = 0; } else scale = Math.min(1, Math.max(0.3, dist / 70)); // 목표 가까이에서 속도를 줄인다
       }
       const len = Math.hypot(dx, dy);
-      if (len) game.facing = { x: dx / len, y: dy / len }; // 자연물을 놓을 때 '보고 있는 방향 앞'을 찾는 데 쓴다
+      if (len) game.facing = { x: dx / len, y: dy / len }; // 놓는 것을 놓을 때 '보고 있는 방향 앞'을 찾는 데 쓴다
       const wet = isWater(me) || (window.NaturePlacement && window.NaturePlacement.inPond(me.x, me.y + FOOT_DY));
       const top = (wet ? WATER_SPEED : LAND_SPEED) * scale;
       const tvx = len ? (dx / len) * top : 0; const tvy = len ? (dy / len) * top : 0;
@@ -153,7 +153,7 @@
       if (!len && Math.hypot(vel.x, vel.y) < 4) { vel.x = 0; vel.y = 0; }
       const ox = me.x; const oy = me.y;
       let fx = me.x + vel.x * dt; let fy = me.y + FOOT_DY + vel.y * dt;
-      // 자연물 막힘: 발 둘레가 몸통 둘레와 겹치면 바깥쪽으로 밀어내고, 부딪히는 쪽 속도만 없앤다(옆으로 미끄러짐)
+      // 놓는 것 막힘: 발 둘레가 몸통 둘레와 겹치면 바깥쪽으로 밀어내고, 부딪히는 쪽 속도만 없앤다(옆으로 미끄러짐)
       const blockers = STATIC_COLLIDERS.concat(window.NaturePlacement ? window.NaturePlacement.colliders() : []);
       for (let pass = 0; pass < 2; pass += 1) {
         for (let i = 0; i < blockers.length; i += 1) {
@@ -360,7 +360,7 @@
   function setRealtime(status) {
     state.realtime = status;
     if (!elements.realtime) return;
-    elements.realtime.textContent = status === 'live' ? '' : (status === 'down' ? '친구들의 움직임을 받지 못하고 있어요. 그래도 자연물은 함께 볼 수 있어요.' : '');
+    elements.realtime.textContent = status === 'live' ? '' : (status === 'down' ? '친구들의 움직임을 받지 못하고 있어요. 그래도 놓은 것들은 함께 볼 수 있어요.' : '');
     state.hudDirty = true;
   }
   let presenceTimer = null;

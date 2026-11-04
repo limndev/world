@@ -1,7 +1,7 @@
 /*
- * 월드 지형과 자연물 설치 규칙 (브라우저와 Node 테스트에서 같이 씁니다).
+ * 월드 지형과 놓는 것 설치 규칙 (브라우저와 Node 테스트에서 같이 씁니다).
  *
- * 서버(supabase/migrations/0002)가 판단하는 규칙: 월드 경계, 종류, 개수, 속도, 자연물끼리 겹침.
+ * 서버(supabase/migrations/0002)가 판단하는 규칙: 월드 경계, 종류, 개수, 속도, 놓는 것끼리 겹침.
  * 서버가 판단하지 않는 규칙(이 파일이 클라이언트에서만 막음): 물, 길, 기존 나무·돌 같은 장식.
  * 그래서 아래 KINDS의 radius는 0002 SQL의 겹침 반경과 반드시 같아야 합니다.
  */
@@ -36,7 +36,7 @@
   // 작은 섬 (물 한가운데 있는 땅)
   const ISLAND = { cx: 1605, cy: 480, rx: 115, ry: 82 };
 
-  // 설치 가능한 자연물. radius는 0004 SQL의 겹침 반경과 같아야 한다(서버가 최종 판단).
+  // 설치 가능한 놓는 것. radius는 0004 SQL의 겹침 반경과 같아야 한다(서버가 최종 판단).
   // displayWidth: 화면에 그리는 너비(겹침 반경보다 크게 그려 풍성해 보이게 함)
   // collide: 캐릭터가 지나가지 못하는 몸통 반경(0이면 지나갈 수 있음) / lift: 땅에서 위로 띄워 그리는 높이
   // onTree: 나무에만 달 수 있음 / inWater: 물 위에만 놓을 수 있음 / ground: 바닥에 깔리는 그림(사람 뒤에 그림)
@@ -125,7 +125,7 @@
   }
 
   // ---------- 땅 규칙 (물·길·장식) ----------
-  // 자연물 하나를 놓을 수 있는 땅인지. 통과하면 null, 막히면 이유('bounds'|'water'|'path'|'decor')를 돌려준다.
+  // 놓는 것 하나를 놓을 수 있는 땅인지. 통과하면 null, 막히면 이유('bounds'|'water'|'path'|'decor')를 돌려준다.
   function groundBlock(kind, x, y) {
     const info = KINDS[kind];
     const r = info ? info.radius : 30;
@@ -185,7 +185,7 @@
     return (a === 'pond' && onWater(b)) || (b === 'pond' && onWater(a));
   }
 
-  // ---------- 자연물끼리 겹침 (서버 규칙과 같은 식) ----------
+  // ---------- 놓는 것끼리 겹침 (서버 규칙과 같은 식) ----------
   function overlapsOthers(kind, x, y, objects, ignoreId) {
     const r = KINDS[kind].radius;
     for (const o of objects) {
@@ -211,7 +211,7 @@
     water: '물 위에는 놓을 수 없어요. 풀밭을 골라 주세요.',
     path: '길 위에는 놓을 수 없어요. 길 옆 풀밭을 골라 주세요.',
     decor: '나무나 덤불 가까이에는 놓을 수 없어요. 조금 떨어진 곳을 골라 주세요.',
-    overlap: '다른 자연물과 너무 가까워요. 조금 떨어진 곳을 골라 주세요.',
+    overlap: '다른 것과 너무 가까워요. 조금 떨어진 곳을 골라 주세요.',
     notwater: '물 위에만 놓을 수 있어요. 연못 안을 골라 주세요.',
     tree: '벌집은 나무에만 달 수 있어요. 나무 가까이를 골라 주세요.',
     hive: '이 나무에는 벌집이 이미 있어요. 다른 나무를 골라 주세요.',
@@ -221,7 +221,7 @@
   // 후보 위치 검사: { ok, reason, message, x, y } (x, y는 규칙에 따라 바뀐 자리. 벌집은 나무 뿌리 자리로 옮겨진다)
   function validate(kind, x, y, objects, ignoreId) {
     const info = KINDS[kind];
-    if (!info) return { ok: false, reason: 'kind', message: '고를 수 없는 자연물이에요.', x, y };
+    if (!info) return { ok: false, reason: 'kind', message: '고를 수 없는 그림이에요.', x, y };
     let px = x; let py = y;
     let block = null;
     if (info.onTree) {
@@ -242,15 +242,15 @@
   // 서버(0002·0004 SQL) 오류 문구 → 학생에게 보여 줄 말
   const SERVER_ERRORS = {
     'nature object overlaps another object': BLOCK_MESSAGES.overlap,
-    'world nature object limit reached': '월드에 자연물이 가득 찼어요. 선생님께 알려 주세요.',
-    'owner nature object limit reached': `내 자연물은 ${PER_USER_LIMIT}개까지 놓을 수 있어요. 하나를 지우고 다시 해 보세요.`,
+    'world nature object limit reached': '우리 공간이 꽉 찼어요. 선생님께 알려 주세요.',
+    'owner nature object limit reached': `내가 놓을 수 있는 건 ${PER_USER_LIMIT}개까지예요. 하나를 지우고 다시 해 보세요.`,
     'nature object write rate exceeded': '잠깐만 쉬었다가 다시 해 보세요.',
     'stale nature object version': '친구가 먼저 바꿨어요. 다시 골라 보세요.',
     'active class membership required': '이 학급에 들어온 뒤에 할 수 있어요. 입장 코드를 다시 확인해 주세요.',
     'authentication required': '로그인이 풀렸어요. 화면을 새로고침해 주세요.',
     'world bounds exceeded': BLOCK_MESSAGES.bounds,
-    'unsupported nature object kind': '고를 수 없는 자연물이에요.',
-    'nature object not found': '이미 사라졌거나 내 자연물이 아니에요.'
+    'unsupported nature object kind': '고를 수 없는 그림이에요.',
+    'nature object not found': '이미 사라졌거나 내가 놓은 게 아니에요.'
   };
   function serverErrorMessage(error) {
     const raw = (error && (error.serverMessage || error.message)) || '';

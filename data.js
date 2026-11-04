@@ -1,5 +1,5 @@
 /*
- * 자연물 데이터 계층. 화면 코드는 이 파일의 두 구현을 같은 방식으로 씁니다.
+ * 놓는 것 데이터 계층. 화면 코드는 이 파일의 두 구현을 같은 방식으로 씁니다.
  *   - createRealData: 실제 Supabase (RPC로 쓰고, 테이블 읽기 + Postgres Changes + 주기적 새로 읽기로 받음)
  *   - createMockData: 서버 없이 시험하는 메모리 구현. 서버 규칙(0002 SQL)을 같은 문구로 흉내 냄.
  * 쓰기(create/move/remove)는 성공하면 서버가 돌려준 행(row)을 반환하고, 실패하면 Error(serverMessage)를 던집니다.
