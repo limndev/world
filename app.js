@@ -144,6 +144,7 @@
         if (dist < 8) { this.touchTarget = null; dx = 0; dy = 0; } else scale = Math.min(1, Math.max(0.3, dist / 70)); // 목표 가까이에서 속도를 줄인다
       }
       const len = Math.hypot(dx, dy);
+      if (len) game.facing = { x: dx / len, y: dy / len }; // 자연물을 놓을 때 '보고 있는 방향 앞'을 찾는 데 쓴다
       const wet = isWater(me) || (window.NaturePlacement && window.NaturePlacement.inPond(me.x, me.y + FOOT_DY));
       const top = (wet ? WATER_SPEED : LAND_SPEED) * scale;
       const tvx = len ? (dx / len) * top : 0; const tvy = len ? (dy / len) * top : 0;

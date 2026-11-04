@@ -65,7 +65,7 @@
     ctx.unsubscribe = data.subscribe(onEvent, onSyncStatus);
     data.list().then((rows) => onSnapshot(rows, Date.now())).catch(() => say('자연물을 불러오지 못했어요. 잠시 뒤에 다시 읽어 와요.', 'invalid'));
     renderLists();
-    say('놓고 싶은 자연물을 눌러 보세요.');
+    say('놓고 싶은 자연물 그림을 누르면 내 앞에 바로 놓여요. 내가 놓은 자연물을 화면에서 누르면 지워져요.');
   }
 
   function stop() {
@@ -113,7 +113,7 @@
       button.setAttribute('aria-label', info.label); button.title = info.label;
       if (info.inWater) button.dataset.need = 'water'; else if (info.onTree) button.dataset.need = 'tree';
       button.append(iconCanvas(kind, 46));
-      button.addEventListener('click', () => beginPlacement('create', { kind }));
+      button.addEventListener('click', () => quickPlace(kind));
       return button;
     }));
   }
@@ -130,7 +130,10 @@
       const image = scene.add.image(o.x, o.y, info.texture).setOrigin(0.5, originY(info));
       if (o.kind !== 'pond') { // 연못은 눌러도 선택되지 않게 한다(물 위를 눌러 걸어 들어갈 수 있도록). 목록에서 고른다.
         image.setInteractive({ useHandCursor: true });
-        image.on('pointerdown', () => { if (!placing) select(o.id); });
+        image.on('pointerdown', () => { // 내 자연물은 맵에서 한 번 누르면 바로 지워지고, 친구 것은 누르면 정보만 보인다
+        if (placing) return; const cur = objects.get(o.id); if (!cur) return;
+        if (isMine(cur)) removeMine(cur); else select(cur.id);
+      });
       }
       v = { image, mark: null, extras: [], phase: (o.x * 0.013 + o.y * 0.007) % 6.28, baseScale: 1 };
       if (o.kind === 'beehive') for (let i = 0; i < 3; i += 1) v.extras.push(scene.add.image(o.x, o.y, 'obj_bee').setDisplaySize(15, 11.5));
@@ -254,10 +257,55 @@
     renderLists();
   }
 
+  // ---------- 버튼을 누르면 바로 놓기 ----------
+  // 캐릭터가 보고 있는 방향 앞쪽에서 가장 가까운, 규칙에 맞는 빈자리를 찾아 곧바로 놓는다.
+  // (벌집은 가까운 나무 뿌리, 물고기·수련은 가까운 물 위로 알아서 간다.) 자리가 마음에 안 들면 '옮기기'로 바꾼다.
+  const FOOT_DY = 30; const FOOT_R = 13; // 캐릭터 발 위치(app.js와 같은 값)
+  function findSpot(kind) {
+    const info = R.KINDS[kind];
+    const me = G.getMe(); const fx = me.x; const fy = me.y + FOOT_DY;
+    const dir = G.facing || { x: 0, y: 1 };
+    const bx = fx + dir.x * 90; const by = fy + dir.y * 90;
+    const list = [...objects.values()];
+    const startAngle = Math.atan2(dir.y, dir.x);
+    const keepAway = info.collide ? info.collide + FOOT_R + 14 : 0; // 내 발밑에 놓아서 끼지 않게
+    for (let r = 0; r <= 1500; r += 30) {
+      const n = r === 0 ? 1 : Math.max(8, Math.ceil((2 * Math.PI * r) / 44));
+      for (let i = 0; i < n; i += 1) {
+        const a = startAngle + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * ((2 * Math.PI) / n); // 앞쪽부터 좌우로 번갈아
+        const x = clamp(snap(bx + Math.cos(a) * r), 0, 2390); const y = clamp(snap(by + Math.sin(a) * r), 0, 1490);
+        const check = R.validate(kind, x, y, list, null);
+        if (!check.ok) continue;
+        if (keepAway && Math.hypot(check.x - fx, check.y - fy) < keepAway) continue;
+        return { x: check.x, y: check.y };
+      }
+    }
+    return null;
+  }
+
+  async function quickPlace(kind) {
+    if (!ctx || busy) return;
+    if (placing) endPlacement(); // 옮기는 중이었다면 그만두고 새로 놓는다
+    if (mineList().length >= R.PER_USER_LIMIT) { say(R.serverErrorMessage({ serverMessage: 'owner nature object limit reached' }), 'invalid'); return; }
+    if (Date.now() < cooldownUntil) { say('잠깐만 쉬었다가 다시 눌러 주세요.', 'invalid'); return; }
+    const spot = findSpot(kind);
+    if (!spot) { say(`${R.eul(label(kind))} 놓을 수 있는 자리를 찾지 못했어요. 다른 곳으로 걸어가서 다시 눌러 보세요.`, 'invalid'); return; }
+    setBusy(true);
+    try {
+      const row = await ctx.data.create({ kind, x: spot.x, y: spot.y });
+      upsertObject(row);
+      select(row.id);
+      say(`${R.eul(label(kind))} ${R.zoneAt(row).name}에 놓았어요. 자리를 바꾸려면 '옮기기'를 눌러요.`, 'valid');
+      startCooldown();
+    } catch (error) {
+      say(R.serverErrorMessage(error), 'invalid');
+      if (/stale|not found|overlaps/.test((error && error.serverMessage) || (error && error.message) || '')) ctx.data.list().then((rows) => onSnapshot(rows, Date.now())).catch(() => {});
+    } finally { setBusy(false); }
+  }
+
   // ---------- 놓기·옮기기 ----------
   function beginPlacement(type, source) {
     if (!ctx || busy) return;
-    if (type === 'create' && mineList().length >= R.PER_USER_LIMIT) { say(R.serverErrorMessage({ serverMessage: 'owner nature object limit reached' }), 'invalid'); return; }
     const me = G.getMe();
     deselect();
     if (placing && placing.type === 'move') { const o = objects.get(placing.id); if (o) objectView(o); }
@@ -383,8 +431,13 @@
       deleteArmedTimer = setTimeout(resetDeleteButton, 4000);
       return;
     }
-    if (Date.now() < cooldownUntil) { say('잠깐만 쉬었다가 다시 눌러 주세요.', 'invalid'); return; }
     resetDeleteButton();
+    await removeMine(o);
+  }
+  // 내 자연물 지우기(패널의 '지우기' 두 번 누르기와 맵에서 한 번 누르기가 함께 쓴다)
+  async function removeMine(o) {
+    if (!ctx || busy || !o || !isMine(o)) return;
+    if (Date.now() < cooldownUntil) { say('잠깐만 쉬었다가 다시 눌러 주세요.', 'invalid'); return; }
     setBusy(true);
     try {
       const row = await ctx.data.remove({ id: o.id, expectedVersion: o.version });
@@ -440,6 +493,6 @@
 
   window.NaturePlacement = {
     start, stop, animate, colliders, inPond,
-    debug: { get objects() { return objects; }, get placing() { return placing; }, get views() { return views; }, get selectedId() { return selectedId; } }
+    debug: { findSpot, get objects() { return objects; }, get placing() { return placing; }, get views() { return views; }, get selectedId() { return selectedId; } }
   };
 })();

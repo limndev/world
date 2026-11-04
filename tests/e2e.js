@@ -300,17 +300,14 @@ async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.Nat
 
     // ===== 4. 자연물 놓기 =====
     console.log('4. 자연물 놓기');
-    await A.page.click('.np-kind[data-kind="rock"]');
-    check((await status(A.page)).includes('돌을 놓을 자리'), '돌을 고르면 안내가 나온다(조사 "을")', await status(A.page));
-    check(await A.page.evaluate(() => window.NatureGame.inputLocked === true), '놓는 동안 캐릭터는 걷지 않는다');
     const me = await A.page.evaluate(() => ({ x: window.NatureGame.getMe().x, y: window.NatureGame.getMe().y }));
-    await A.page.keyboard.press('ArrowRight'); await A.page.keyboard.press('ArrowRight');
-    const afterKeys = await A.page.evaluate(() => ({ x: window.NaturePlacement.debug.placing.x, y: window.NaturePlacement.debug.placing.y, meX: window.NatureGame.getMe().x }));
-    check(afterKeys.x === Math.round(me.x / 10) * 10 + 50, '방향키로 후보 위치가 25씩 움직인다', { afterKeys, me });
-    check(Math.abs(afterKeys.meX - me.x) < 1, '그동안 캐릭터는 그대로다');
-    await A.page.keyboard.press('Enter');
-    check(await until(async () => (await status(A.page)).includes('돌을 놓았어요')), 'Enter로 놓으면 "돌을 놓았어요."');
-    check(await A.page.evaluate(() => window.NatureGame.inputLocked === false), '다 놓으면 다시 걸을 수 있다');
+    await A.page.click('.np-kind[data-kind="rock"]');
+    check(await until(async () => (await status(A.page)).includes('돌을')) && (await status(A.page)).includes('놓았어요'), '그림을 누르면 바로 "돌을 … 놓았어요."', await status(A.page));
+    check(await A.page.locator('#np-confirm').isHidden() && await A.page.locator('#np-cancel').isHidden(), '"여기에 놓기"·"취소" 버튼은 나오지 않는다');
+    check(await A.page.evaluate(() => window.NatureGame.inputLocked === false), '놓은 뒤에도 캐릭터는 계속 걸을 수 있다');
+    const first = await A.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].find((o) => o.kind === 'rock' && o.owner_id === window.NatureGame.getMe().id));
+    check(!!first && Math.hypot(first.x - me.x, first.y - (me.y + 30)) < 260, '내 가까이(앞쪽)에 놓인다', { first, me });
+    check(!!first && R.validate('rock', first.x, first.y, [], null).ok, '놓인 자리는 땅 규칙(물·길·나무 아님)에 맞는다');
     check((await text(A.page, '#np-count')).includes('내 자연물 1/12'), '내 자연물 개수가 1/12로 바뀐다');
     check(await until(async () => (await B.page.evaluate(() => window.NaturePlacement.debug.objects.size)) === 1, 4000), 'B 화면에도 곧바로 나타난다');
     check(fake.count('rpc:create_nature_object') === 1, '서버 호출은 한 번뿐이다');
@@ -319,43 +316,46 @@ async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.Nat
 
     // ===== 5. 거부 문구 (서버에 가기 전에 막는다) =====
     console.log('5. 놓을 수 없는 곳');
-    await waitCooldown(A);
-    await A.page.click('.np-kind[data-kind="wildflower"]');
-    const createsBefore = fake.count('rpc:create_nature_object');
-    for (const [name, x, y, word] of [['물', 1600, 600, '물 위'], ['길', 600, 850, '길 위'], ['나무 위', 225, 205, '나무나 덤불']]) {
-      await pointAt(A, x, y);
-      check((await status(A.page)).includes(word), `${name}: 안내 문구 "${word}"`, await status(A.page));
-      check(await A.page.locator('#np-confirm').isDisabled(), `${name}: "여기에 놓기" 버튼이 꺼진다`);
+    const standAt = async (c, x, y, ms = 400) => { await c.page.evaluate(([px, py]) => { const m = window.NatureGame.getMe(); m.x = px; m.y = py; window.NatureGame.scene.anchor.setPosition(px, py); window.NatureGame.scene.vel = { x: 0, y: 0 }; }, [x, y]); await sleep(ms); };
+    for (const [name, x, y] of [['물가', 1600, 520], ['길 위', 600, 820], ['나무 곁', 225, 175]]) {
+      await waitCooldown(A);
+      await standAt(A, x, y);
+      const before = await A.page.evaluate(() => window.NaturePlacement.debug.objects.size);
+      await A.page.click('.np-kind[data-kind="wildflower"]');
+      const added = await until(async () => (await A.page.evaluate(() => window.NaturePlacement.debug.objects.size)) === before + 1, 4000);
+      check(added, `${name}에 서서 눌러도 알아서 놓을 수 있는 자리를 찾는다`, await status(A.page));
+      const all = await A.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()]);
+      const mine = all[all.length - 1];
+      const others = all.filter((o) => o.id !== mine.id);
+      check(R.validate('wildflower', mine.x, mine.y, others, null).ok, `${name}: 새로 놓인 자리가 물·길·나무·다른 자연물과 겹치지 않는다`, mine);
     }
-    await A.page.keyboard.press('Enter');
-    check(fake.count('rpc:create_nature_object') === createsBefore, '막힌 자리에서 Enter를 눌러도 서버로 보내지 않는다');
-    // 내 돌 바로 옆(겹침)
-    const rock = [...await A.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()])][0];
-    await pointAt(A, rock.x + 20, rock.y);
-    check((await status(A.page)).includes('다른 자연물과 너무 가까워요'), '겹치면 "너무 가까워요"');
-    await A.page.keyboard.press('Escape');
-    check((await status(A.page)).includes('취소'), 'Esc로 취소할 수 있다');
-    check(await A.page.locator('#np-confirm').isHidden(), '취소하면 놓기 버튼이 사라진다');
 
     // ===== 6. 서버만 아는 겹침 → 서버 오류 문구, 그리고 5초 안에 화면이 따라잡는다(폴링) =====
     console.log('6. 화면이 모르는 변경(서버 오류와 새로 읽기)');
     const hidden = fake.inject({ kind: 'shrub', x: 900, y: 330 }); // 이벤트 없이 서버에만 존재
+    await waitCooldown(A);
+    await standAt(A, 900, 210, 300); // 앞쪽 90 자리가 정확히 숨은 덤불 자리가 되도록 선다
+    await A.page.evaluate(() => { window.NatureGame.facing = { x: 0, y: 1 }; });
     await A.page.click('.np-kind[data-kind="shrub"]');
-    await pointAt(A, 900, 330);
-    const knew = await A.page.evaluate((id) => window.NaturePlacement.debug.objects.has(id), hidden.id);
-    check(knew || (await status(A.page)).includes('놓을 수 있어요'), '화면은 아직 모르므로 놓을 수 있다고 보인다(이미 새로 읽었다면 건너뜀)', await status(A.page));
-    await A.page.keyboard.press('Enter');
-    check(await until(async () => (await status(A.page)).includes('너무 가까워요')), '겹침이면(화면 또는 서버가 거절)  같은 문구로 안내한다');
+    await until(async () => /너무 가까워요|놓았어요/.test(await status(A.page)), 5000);
+    const rejected = (await status(A.page)).includes('너무 가까워요');
+    const knownNow = await A.page.evaluate((id) => window.NaturePlacement.debug.objects.has(id), hidden.id);
+    check(rejected || knownNow, '화면이 모르는 겹침은 서버가 거절하고 같은 문구로 안내한다(그 사이 새로 읽었다면 알아서 피해서 놓는다)', await status(A.page));
     check(await until(async () => await A.page.evaluate((id) => window.NaturePlacement.debug.objects.has(id), hidden.id), 7000), '5초 안에 새로 읽어서 그 자연물이 화면에 나타난다');
-    await A.page.keyboard.press('Escape');
+    await waitCooldown(A);
+    const beforeRetry = await A.page.evaluate(() => window.NaturePlacement.debug.objects.size);
+    await A.page.click('.np-kind[data-kind="shrub"]');
+    check(await until(async () => (await A.page.evaluate(() => window.NaturePlacement.debug.objects.size)) === beforeRetry + 1, 4000), '다시 누르면 비어 있는 다른 자리에 놓인다', await status(A.page));
 
     // ===== 7. 옮기기와 지우기 =====
     console.log('7. 옮기기와 지우기');
     await waitCooldown(A);
-    await A.page.click('#np-list .np-item');
+    const rockId = await A.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].find((o) => o.kind === 'rock' && o.owner_id === window.NatureGame.getMe().id).id);
+    await A.page.click(`#np-list .np-item[data-id="${rockId}"]`);
     check(await A.page.locator('#np-selected').isVisible(), '목록에서 고르면 옮기기·지우기가 보인다');
     await A.page.click('#np-move');
-    await A.page.keyboard.press('ArrowDown'); await A.page.keyboard.press('ArrowDown');
+    const freeSpot = await A.page.evaluate((id) => { const R2 = window.NatureRules; const list = [...window.NaturePlacement.debug.objects.values()]; for (let y = 1300; y >= 1220; y -= 10) for (let x = 700; x <= 1500; x += 10) { if (R2.validate('rock', x, y, list, id).ok) return { x, y }; } return null; }, rockId);
+    await pointAt(A, freeSpot.x, freeSpot.y);
     await A.page.keyboard.press('Enter');
     check(await until(async () => (await status(A.page)).includes('돌을 옮겼어요')), '옮기면 "돌을 옮겼어요."');
     const movedRow = await A.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].find((o) => o.version === 2));
@@ -410,36 +410,45 @@ async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.Nat
     check((await E.page.evaluate(() => [...document.querySelectorAll('#np-kinds .np-kind')].every((b) => b.innerText.trim() === '' && b.querySelector('canvas') && b.getAttribute('aria-label')))), '버튼에는 글자 없이 그림(canvas)만 있고, 이름은 aria-label에만 있다');
     check((await E.page.evaluate(() => [...document.querySelectorAll('#np-kinds .np-kind')].map((b) => b.getAttribute('aria-label')).join(','))) === '돌,꽃,작은 나무,다람쥐,토끼,나비,작은 연못,갈대,덩굴,벌집,물고기,수련', '이름은 쉬운 말이다(관목 → 작은 나무)');
     check((await E.page.evaluate(() => [...document.querySelectorAll('#np-kinds .np-kind canvas')].every((c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 40) if (d[i] > 30) n += 1; return n > 80; }))), '모든 버튼 그림이 비어 있지 않다');
-    // 규칙 안내: 벌집은 나무에만, 물고기는 물에만
-    await waitCooldown(E);
-    await E.page.click('.np-kind[data-kind="beehive"]'); await pointAt(E, 640, 520);
-    check((await status(E.page)).includes('나무에만'), '벌집을 풀밭에 놓으려 하면 "나무에만" 안내', await status(E.page));
-    check(await E.page.locator('#np-confirm').isDisabled(), '그 자리에서는 놓기 버튼이 꺼진다');
-    await E.page.keyboard.press('Escape');
-    await E.page.click('.np-kind[data-kind="fish"]'); await pointAt(E, 640, 520);
-    check((await status(E.page)).includes('물 위에만'), '물고기를 풀밭에 놓으려 하면 "물 위에만" 안내', await status(E.page));
-    await E.page.keyboard.press('Escape');
-    await E.page.click('.np-kind[data-kind="waterlily"]'); await pointAt(E, 640, 520);
-    check((await status(E.page)).includes('물 위에만'), '수련도 풀밭에는 놓을 수 없다');
-    await E.page.keyboard.press('Escape');
-    const spots = [['rock', 560, 560], ['wildflower', 700, 640], ['shrub', 820, 520], ['squirrel', 460, 640], ['rabbit', 440, 520], ['butterfly', 700, 480],
-      ['pond', 1020, 430], ['reed', 560, 380], ['vine', 480, 420], ['beehive', 1080, 600], ['fish', 1500, 300], ['waterlily', 1560, 260]];
-    for (const [kind, x, y] of spots) {
+    // 그림 버튼만 눌러서 열두 가지를 모두 놓는다. 벌집은 알아서 나무에, 물고기·수련은 알아서 물에 놓여야 한다.
+    await E.page.evaluate(() => { const m = window.NatureGame.getMe(); m.x = 640; m.y = 470; window.NatureGame.scene.anchor.setPosition(640, 470); window.NatureGame.facing = { x: 1, y: 0 }; });
+    const kindsInOrder = ['rock', 'wildflower', 'shrub', 'squirrel', 'rabbit', 'butterfly', 'pond', 'reed', 'vine', 'beehive', 'fish', 'waterlily'];
+    for (const kind of kindsInOrder) {
       await waitCooldown(E);
       await E.page.click(`.np-kind[data-kind="${kind}"]`);
-      await pointAt(E, x, y);
-      await E.page.keyboard.press('Enter');
       const placed = await until(async () => (await E.page.evaluate((k) => [...window.NaturePlacement.debug.objects.values()].some((o) => o.kind === k && o.owner_id === window.NatureGame.getMe().id), kind)), 4000);
       if (!placed) console.log('PLACEDBG', kind, await status(E.page));
-      check(placed, `${kind} 놓기`);
+      check(placed, `${kind}: 그림 버튼 한 번으로 놓인다`);
     }
     check((await E.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].filter((o) => o.owner_id === window.NatureGame.getMe().id).length)) === 12, '열두 종류를 모두 놓았다');
+    const allRows = await E.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()]);
+    const mineRows = await E.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].filter((o) => o.owner_id === window.NatureGame.getMe().id));
+    check(mineRows.every((o) => R.validate(o.kind, o.x, o.y, allRows.filter((q) => q.id !== o.id), o.id).ok), '놓인 열두 개 모두 각자의 땅 규칙에 맞는 자리다');
+    const fishRow = mineRows.find((o) => o.kind === 'fish'); const lilyRow = mineRows.find((o) => o.kind === 'waterlily');
+    check(R.isWater(fishRow) || R.inUserPond(fishRow.x, fishRow.y, allRows), '물고기는 물 위에 놓였다', fishRow);
+    check(R.isWater(lilyRow) || R.inUserPond(lilyRow.x, lilyRow.y, allRows), '수련은 물 위에 놓였다', lilyRow);
     const hive = await E.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].find((o) => o.kind === 'beehive'));
-    check(hive && hive.x === 1080 && hive.y === 672, '벌집은 눌러 준 자리가 아니라 나무 뿌리 자리(저장 좌표)에 붙는다', hive);
+    check(!!hive && R.TREES.some((tr) => tr.x === hive.x && tr.y === hive.y), '벌집은 나무 뿌리 자리(저장 좌표)에 붙는다', hive);
     // 두 번째 벌집은 같은 나무에 달 수 없다
     await waitCooldown(E);
-    await E.page.click('.np-kind[data-kind="rock"]'); await E.page.keyboard.press('Escape');
-    // (내 12개를 다 썼으므로 상한 문구가 먼저 나온다. 같은 나무 규칙은 단위 시험에서 확인)
+    await E.page.click('.np-kind[data-kind="rock"]');
+    check((await status(E.page)).includes('12개까지'), '12개를 다 쓴 뒤에 누르면 안내만 나온다');
+    // (같은 나무에 벌집 두 개 금지 규칙은 규칙 단위 시험에서 확인)
+    // 맵에서 내 자연물을 한 번 누르면 바로 지워지고, 친구 것은 지워지지 않는다
+    await waitCooldown(E);
+    const friendRow = await E.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].find((o) => o.owner_id !== window.NatureGame.getMe().id));
+    if (friendRow) {
+      await E.page.evaluate((id) => window.NaturePlacement.debug.views.get(id).image.emit('pointerdown'), friendRow.id);
+      await sleep(300);
+      check(await E.page.evaluate((id) => window.NaturePlacement.debug.objects.has(id), friendRow.id), '친구가 놓은 자연물을 눌러도 지워지지 않는다');
+    }
+    const myRock = await E.page.evaluate(() => [...window.NaturePlacement.debug.objects.values()].find((o) => o.kind === 'squirrel' && o.owner_id === window.NatureGame.getMe().id));
+    const callsBefore = fake.count('rpc:delete_nature_object');
+    await E.page.evaluate((id) => window.NaturePlacement.debug.views.get(id).image.emit('pointerdown'), myRock.id);
+    check(await until(async () => !(await E.page.evaluate((id) => window.NaturePlacement.debug.objects.has(id), myRock.id)), 4000), '내 다람쥐를 맵에서 한 번 누르면 바로 사라진다');
+    check(fake.count('rpc:delete_nature_object') === callsBefore + 1, '서버에 지우기 요청이 한 번 간다');
+    check((await status(E.page)).includes('지웠어요'), '"지웠어요" 안내가 나온다', await status(E.page));
+    check((await text(E.page, '#np-count')).includes('내 자연물 11/12'), '지우면 개수가 11/12로 줄어든다');
     // 카메라를 그 장면으로 옮겨서 캡처
     await E.page.evaluate(() => { const m = window.NatureGame.getMe(); m.x = 640; m.y = 470; window.NatureGame.scene.anchor.setPosition(640, 470); });
     await sleep(1200);
@@ -452,7 +461,7 @@ async function pointAt(c, x, y) { await c.page.evaluate(([px, py]) => window.Nat
     // ===== 11b. 걷기: 서서히 빨라지고, 자연물과 나무를 뚫지 못한다 =====
     console.log('11b. 걷기와 막힘');
     const walk = async (page, key, ms) => { await page.keyboard.down(key); await sleep(ms); await page.keyboard.up(key); };
-    await E.page.evaluate(() => { const m = window.NatureGame.getMe(); m.x = 540; m.y = 470; window.NatureGame.scene.anchor.setPosition(540, 470); window.NatureGame.scene.vel = { x: 0, y: 0 }; });
+    await E.page.evaluate(() => { const m = window.NatureGame.getMe(); m.x = 720; m.y = 1330; window.NatureGame.scene.anchor.setPosition(720, 1330); window.NatureGame.scene.vel = { x: 0, y: 0 }; });
     // 시계에 흔들리지 않도록 게임 루프를 멈추고, 1/60초씩 직접 걸음을 계산해서 속도 변화를 본다.
     const prof = await E.page.evaluate(() => {
       const sc = window.NatureGame.scene; sc.sys.game.loop.sleep();
