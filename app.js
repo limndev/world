@@ -402,7 +402,7 @@
     if (state.gamePromise) return state.gamePromise;
     state.gamePromise = new Promise((resolve) => {
       state.resolveScene = resolve;
-      state.phaser = new Phaser.Game({ type: Phaser.AUTO, parent: 'game', width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT, backgroundColor: '#9dce8e', scene: NatureScene, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH } });
+      state.phaser = new Phaser.Game({ type: Phaser.AUTO, parent: 'game', width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT, backgroundColor: '#9dce8e', scene: NatureScene, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.NO_CENTER } });
     });
     return state.gamePromise;
   }

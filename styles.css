@@ -26,7 +26,7 @@ button.secondary, #stop-button { background: #e2eee6; color: #173c36; }
 button:focus-visible, input:focus-visible, .download-link:focus-visible { outline: 3px solid #f2a900; outline-offset: 2px; }
 .world-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; margin-top: 8px; align-items: start; }
 #game { box-sizing: content-box; width: calc(100% - 8px); aspect-ratio: 960 / 600; border: 4px solid #38795c; border-radius: 22px; overflow: hidden; background: #9dce8e; box-shadow: 0 12px 28px rgb(39 110 75 / 18%); touch-action: none; } /* 칸 비율을 초원 화면(960×600)과 똑같이 맞춰, 위아래 빈틈(하늘색 줄) 없이 초원만 꽉 차게 */
-#game canvas { display: block; width: 100% !important; height: 100% !important; }
+#game canvas { display: block; width: 100% !important; height: 100% !important; margin: 0 !important; } /* Phaser가 붙이는 여백(margin)도 없앰 */
 .controls { margin: 10px 4px; }
 .location-status { margin: 0 4px; padding: 10px 12px; border-left: 4px solid #6eaa62; background: #edf5e5; border-radius: 0 8px 8px 0; line-height: 1.55; }
 #presence-list { padding-left: 20px; margin-bottom: 26px; }
